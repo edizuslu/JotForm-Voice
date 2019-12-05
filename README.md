@@ -2,12 +2,12 @@
 
 # JotForm-Voice
 
-This project is voice recognation extension for JotForm. Users can fill form while listening form assistan with this extension using HTML5 Speech Recognition library.
+This project is voice recognation extension for JotForm. The user controls the card form through his voice. He navigates between form fields by some keywords like the "next/previous question". The user can also fill an area with his voice, and finally, send the form with "submit" command.
 
 ### Features
 - Filling form elements with voice
-- Listening form headers and options
-- Updating filled form elements
+- Listening form headers and question options
+- Updating answers
 - Submitting form
 
 #### Implemented for following form elements :

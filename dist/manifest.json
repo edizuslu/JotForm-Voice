@@ -7,5 +7,10 @@
       "matches": ["https://form.jotform.com/*"],
       "js": ["jotform-voice.esm.js"]
     }
-  ]
+  ],
+  "icons": {
+    "16": "JotForm-Logo.png",
+    "48": "JotForm-Logo.png",
+    "128": "JotForm-Logo.png"
+  }
 }
