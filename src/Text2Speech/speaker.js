@@ -69,8 +69,6 @@ export const readQuestionOptions = () => {
  * @return {function}
  */
 export const getReadOptionsFunction = dataType => {
-  console.log("Heyo : ");
-  console.log(dataType);
   return wordMap.formElementFunctions[dataType].readOptions;
 };
 
