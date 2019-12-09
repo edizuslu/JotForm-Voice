@@ -1,5 +1,4 @@
 import { removeSpaces } from "../SpeechRecognation/filterCommand";
-import { speakAndStartRecord, stopRecord } from "../Text2Speech/speaker";
 
 /**
  * Set questions array to window
@@ -16,13 +15,6 @@ export const getQuestions = () => {
     questions.push({ questionFields, dataType, questionHeader, fieldNo });
   }
   window.questions = questions;
-};
-
-/**
- * Checks if form submitted.
- */
-export const formSubmitted = () => {
-  return document.getElementById("cardProgress-questionCount") === null;
 };
 
 /**
@@ -70,7 +62,17 @@ const getQuestionFields = questionNumber => {
 };
 
 /**
+ * @param {HTMLElement} jfField
+ * @param {string} tagName
+ * @return {HTMLCollection}
+ */
+export const getElementByTagName = (jfField, tagName) => {
+  return jfField.getElementsByTagName(tagName);
+};
+
+/**
  * Get header text
+ * @returns {string}
  */
 const getHeaderText = () => {
   return document.getElementsByClassName("jfWelcome-header form-header")[0]
@@ -79,6 +81,7 @@ const getHeaderText = () => {
 
 /**
  * Get subheader text
+ * @returns {string}
  */
 const getSubHeaderText = () => {
   return document.getElementsByClassName(
@@ -88,6 +91,7 @@ const getSubHeaderText = () => {
 
 /**
  * Get header message
+ * @returns {string}
  */
 export const getHeaderMessage = () => {
   const headerText = getHeaderText();
@@ -96,9 +100,30 @@ export const getHeaderMessage = () => {
 };
 
 /**
+ * Controls is last header
  * @param {HTMLElement} {button}
  * @returns {boolean}
  */
 export const isLastHeader = button => {
   return button.getAttribute("class").includes("forNext-heading");
+};
+
+/**
+ * Controls if is last question or not
+ * @returns {boolean}
+ */
+export const isLastQuestion = button => {
+  return window.currentQuestion + 1 >= window.questions.length;
+};
+
+/**
+ * Checks is end of the form or not
+ * @param {object} {question}
+ * @returns {boolean}
+ */
+export const isEndOfTheForm = question => {
+  return (
+    window.currentQuestion === window.questionCount - 1 &&
+    question.fieldNo === question.questionFields.length - 1
+  );
 };

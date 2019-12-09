@@ -45,10 +45,9 @@ export const readQuestionHeader = () => {
       window.speechSynthesis.speak(message);
       message.onend = function() {
         question.fieldNo = 0;
-        readQuestionOptions();
+        readQuestionOptions(dataType);
       };
     }, 1000);
-    // speakAndStartRecord(questionHeader);
   } else {
     speakAndStartRecord(questionHeader);
   }
@@ -59,15 +58,27 @@ export const readQuestionHeader = () => {
  */
 export const readQuestionOptions = () => {
   const currentQuestion = getCurrentQuestion();
-  const readFunction = wordMap.readOptionsFunctions[currentQuestion.dataType];
-  readFunction(currentQuestion);
+  const { dataType } = currentQuestion;
+  const readOptionsFunction = getReadOptionsFunction(dataType);
+  readOptionsFunction(currentQuestion);
+};
+
+/**
+ * Ger read options function
+ * @param {string} dataType
+ * @return {function}
+ */
+export const getReadOptionsFunction = dataType => {
+  console.log("Heyo : ");
+  console.log(dataType);
+  return wordMap.formElementFunctions[dataType].readOptions;
 };
 
 /**
  * Get Current Question
  * @returns {object}
  */
-const getCurrentQuestion = () => {
+export const getCurrentQuestion = () => {
   const currentQuestion = window.currentQuestion;
   return window.questions[currentQuestion];
 };
@@ -140,14 +151,6 @@ const hasMultipleAnswers = answer => {
 };
 
 /**
- * @param {string} answer
- * @returns {string}
- */
-const replaceUndefinedWithEmpty = answer => {
-  return answer.replace("undefined", "empty");
-};
-
-/**
  * Get all answers
  * @returns {string}
  */
@@ -163,7 +166,7 @@ const getAllAnswers = () => {
       : formatAnswer(qAnswer, qid, qHeader);
     qid += 1;
   }
-  return replaceUndefinedWithEmpty(answersText);
+  return answersText;
 };
 
 /**
@@ -172,8 +175,6 @@ const getAllAnswers = () => {
 export const readAllAnswers = () => {
   const { optionalEndFormMessage } = wordMap;
   const answers = getAllAnswers() + optionalEndFormMessage;
-  console.log("Answers : ");
-  console.log(answers);
   speakAndStartRecord(answers);
 };
 

@@ -1,49 +1,113 @@
 import {
   startRecord,
-  stopRecord,
-  readQuestionOptions
+  readQuestionOptions,
+  speakAndStartRecord
 } from "../Text2Speech/speaker";
 
 /**
- * @returns {boolean}
+ * Read matrix question fields and answers options
+ * @param {object} question
  */
-const answerOptionsReaded = () => {
-  return questions[currentQuestion].matrixRows === undefined;
+export const readMatrixOptions = question => {
+  if (!answerOptionsReaded(question)) {
+    readAnswerOptions(question);
+  } else {
+    readSubQuestionFields(question);
+  }
 };
 
 /**
- * @param {number} currentRow
- * @param {HTMLCollection} rows
+ * Controls if answer options are readed
+ * @param {object} question
+ * @returns {boolean}
  */
-const readMatrixRow = (currentRow, rows) => {
-  setTimeout(function() {
-    const subQuestion = rows[currentRow]
-      .getElementsByClassName("jfMatrixTable-cell")[0]
-      .getElementsByTagName("div")[0].innerHTML;
-    const msg = new SpeechSynthesisUtterance(subQuestion);
-    window.speechSynthesis.speak(msg);
-    msg.onend = function(event) {
-      startRecord();
-    };
-  }, 1000);
+const answerOptionsReaded = question => {
+  return question.matrixRows !== undefined;
 };
 
-export const readMatrixOptions = question => {
-  stopRecord();
-  const questions = window.questions;
+/**
+ * Read answer options
+ * @param {object} question
+ */
+const readAnswerOptions = question => {
+  const { questionFields } = question;
+  const matrixField = questionFields[0];
+  const questionDataType = matrixField.getAttribute("data-type");
+  const answerOptions = getAnswerOptions(matrixField, questionDataType);
+  const optionsText = getOptionsText(
+    questionDataType,
+    answerOptions,
+    matrixField
+  );
+  speaknReadQuestionOption(optionsText);
+};
+
+/**
+ * Read matrix sub question fields and answers options
+ * @param {object} question
+ */
+const readSubQuestionFields = question => {
   const { questionFields } = question;
   const matrixFields = questionFields[0];
-  if (answerOptionsReaded()) {
-    readAnswerOptions(matrixFields);
+  const questionDataType = matrixFields.getAttribute("data-type");
+  if (questionDataType === "Radio Button") {
+    const { fieldNo, matrixRows } = question;
+    const subQuestion = getSubQuestion(fieldNo, matrixRows);
+    speakAndStartRecord(subQuestion);
   } else {
-    const questionDataType = matrixFields.getAttribute("data-type");
-    if (questionDataType === "Radio Button") {
-      const currentRow = questions[currentQuestion].fieldNo;
-      const rows = questions[currentQuestion].matrixRows;
-      readMatrixRow(currentRow, rows);
-    } else if (questionDataType === "Emoji Slider") {
-      startRecord();
-    }
+    // Emoji Slider has no sub question fields.
+    startRecord();
+  }
+};
+
+/**
+ * Get question text
+ * @param {string} questionDataType
+ * @param {HTMLCollection} answerOptions
+ * @param {HTMLElement} matrixField
+ * @returns {string}
+ */
+const getOptionsText = (questionDataType, answerOptions, matrixField) => {
+  let optionsText = "Possible answers are : ";
+  if (questionDataType === "Radio Button") {
+    setMatrixRows(matrixField, "radio");
+    optionsText += options2Text(answerOptions);
+  } else {
+    setMatrixRows(matrixField, "emoji");
+    optionsText += getScaleOptionsText(answerOptions);
+  }
+  return optionsText;
+};
+
+/**
+ * Get answer options
+ * @param {HTMLElement} matrixField
+ * @returns {HTMLCollection}
+ */
+const getAnswerOptions = (matrixField, questionDataType) => {
+  if (questionDataType === "Radio Button") {
+    return matrixField.getElementsByClassName("jfMatrixHeader-item");
+  } else {
+    const answerOptions = matrixField.getElementsByClassName(
+      "jfMatrixScale-sep"
+    )[0];
+    return answerOptions.getElementsByClassName("scaleSep");
+  }
+};
+
+/**
+ * Set matrix rows
+ * @param {HTMLElement} matrixField
+ * @param {string} type
+ */
+const setMatrixRows = (matrixField, type) => {
+  switch (type) {
+    case "radio":
+      setRowsAttribute(getMatrixRowsOfField(matrixField));
+      break;
+    default:
+      // Emoji Slider
+      setRowsAttribute("emoji slider");
   }
 };
 
@@ -56,20 +120,6 @@ const getMatrixRowsOfField = matrixField => {
 };
 
 /**
- * @param {HTMLElement} matrixField
- * @param {string} type
- */
-const setMatrixRows = (matrixField, type) => {
-  switch (type) {
-    case "radio":
-      setRowsAttribute(getMatrixRowsOfField(matrixField));
-      break;
-    default:
-      setRowsAttribute("emoji slider");
-  }
-};
-
-/**
  * @param {HTMLElement,string} rowValue
  */
 const setRowsAttribute = rowValue => {
@@ -79,7 +129,7 @@ const setRowsAttribute = rowValue => {
 /**
  * @param {string} text
  */
-const speakText = text => {
+const speaknReadQuestionOption = text => {
   setTimeout(function() {
     const msg = new SpeechSynthesisUtterance(text);
     window.speechSynthesis.speak(msg);
@@ -87,6 +137,15 @@ const speakText = text => {
       readQuestionOptions();
     };
   }, 1000);
+};
+
+/**
+ * @returns {boolean}
+ */
+const getSubQuestion = (currentRow, rows) => {
+  return rows[currentRow]
+    .getElementsByClassName("jfMatrixTable-cell")[0]
+    .getElementsByTagName("div")[0].innerHTML;
 };
 
 /**
@@ -130,30 +189,4 @@ const options2Text = options => {
     optionsText += getOptionText(option) + " , ";
   }
   return optionsText.trim();
-};
-
-/**
- * @param {HTMLCollection} questionFields
- */
-const readAnswerOptions = questionFields => {
-  const matrixField = questionFields;
-  const questionDataType = questionFields.getAttribute("data-type");
-  let optionsText = "Possible answers are : ";
-  if (questionDataType === "Radio Button") {
-    const answerOptions = matrixField.getElementsByClassName(
-      "jfMatrixHeader-item"
-    );
-    setMatrixRows(matrixField, "radio");
-    optionsText += options2Text(answerOptions);
-    speakText(optionsText);
-  } else if (questionDataType === "Emoji Slider") {
-    let answerOptions = questionFields.getElementsByClassName(
-      "jfMatrixScale-sep"
-    )[0];
-    setMatrixRows(matrixField, "emoji");
-    answerOptions = answerOptions.getElementsByClassName("scaleSep");
-    answerOptions = getScaleOptionsText(answerOptions);
-    optionsText += answerOptions;
-    speakText(optionsText);
-  }
 };

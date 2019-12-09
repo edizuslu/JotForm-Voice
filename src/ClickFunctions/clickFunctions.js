@@ -43,6 +43,9 @@ export const clickSubmit = () => {
   submitButton.click();
 };
 
+/**
+ * Update questions active
+ */
 const updateQuestionsActive = () => {
   if (window.questionsActive) {
     window.questionsActive = false;

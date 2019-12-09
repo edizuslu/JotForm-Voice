@@ -15,15 +15,38 @@ const getRecognationObject = () => {
   return recognition;
 };
 
-const readDropdownOptions = question => {
+/**
+ * @param {object} question
+ * @param {function} startRecord
+ * @param {function} stopRecord
+ */
+const readDropdownOptions = (question, startRecord, stopRecord) => {
   stopRecord();
   const { questionFields } = question;
   const dropdownField = questionFields[0];
+  const optionsText = getDropdownOptionsText(dropdownField);
+  openDropdownNReadOptions(optionsText, dropdownField, startRecord);
+};
+
+/**
+ * @param {HTMLElement} dropdownField
+ * @returns {string}
+ */
+const getDropdownOptionsText = dropdownField => {
   let optionsText = "Possible options are: ";
   const options = dropdownField.getElementsByTagName("option");
   for (let option of options) {
     optionsText += option.innerHTML + " , ";
   }
+  return optionsText;
+};
+
+/**
+ * @param {string} optionsText
+ * @param {HTMLElement} dropdownField
+ * @param {function} startRecord
+ */
+const openDropdownNReadOptions = (optionsText, dropdownField, startRecord) => {
   setTimeout(function() {
     openDropdownMenu(dropdownField);
     const msg = new SpeechSynthesisUtterance(optionsText);
@@ -36,6 +59,14 @@ const readDropdownOptions = question => {
 
 /**
  * @param {HTMLElement} dropdownField
+ */
+const openDropdownMenu = dropdownField => {
+  const dropDownToggle = getDropdownToggle(dropdownField);
+  dropDownToggle.click();
+};
+
+/**
+ * @param {HTMLElement} dropdownField
  * @returns {HTMLElement}
  */
 const getDropdownToggle = dropdownField => {
@@ -44,53 +75,109 @@ const getDropdownToggle = dropdownField => {
 };
 
 /**
- * @param {HTMLElement} dropdownField
+ * Read matrix question fields and answers options
+ * @param {object} question
  */
-const openDropdownMenu = dropdownField => {
-  const dropDownToggle = getDropdownToggle(dropdownField);
-  dropDownToggle.click();
+const readMatrixOptions = question => {
+  if (!answerOptionsReaded(question)) {
+    readAnswerOptions(question);
+  } else {
+    readSubQuestionFields(question);
+  }
 };
 
 /**
+ * Controls if answer options are readed
+ * @param {object} question
  * @returns {boolean}
  */
-const answerOptionsReaded = () => {
-  return questions[currentQuestion].matrixRows === undefined;
+const answerOptionsReaded = question => {
+  return question.matrixRows !== undefined;
 };
 
 /**
- * @param {number} currentRow
- * @param {HTMLCollection} rows
+ * Read answer options
+ * @param {object} question
  */
-const readMatrixRow = (currentRow, rows) => {
-  setTimeout(function() {
-    const subQuestion = rows[currentRow]
-      .getElementsByClassName("jfMatrixTable-cell")[0]
-      .getElementsByTagName("div")[0].innerHTML;
-    const msg = new SpeechSynthesisUtterance(subQuestion);
-    window.speechSynthesis.speak(msg);
-    msg.onend = function(event) {
-      startRecord();
-    };
-  }, 1000);
+const readAnswerOptions = question => {
+  const { questionFields } = question;
+  const matrixField = questionFields[0];
+  const questionDataType = matrixField.getAttribute("data-type");
+  const answerOptions = getAnswerOptions(matrixField, questionDataType);
+  const optionsText = getOptionsText(
+    questionDataType,
+    answerOptions,
+    matrixField
+  );
+  speaknReadQuestionOption(optionsText);
 };
 
-const readMatrixOptions = question => {
-  stopRecord();
-  const questions = window.questions;
+/**
+ * Read matrix sub question fields and answers options
+ * @param {object} question
+ */
+const readSubQuestionFields = question => {
   const { questionFields } = question;
   const matrixFields = questionFields[0];
-  if (answerOptionsReaded()) {
-    readAnswerOptions(matrixFields);
+  const questionDataType = matrixFields.getAttribute("data-type");
+  if (questionDataType === "Radio Button") {
+    const { fieldNo, matrixRows } = question;
+    const subQuestion = getSubQuestion(fieldNo, matrixRows);
+    speakAndStartRecord(subQuestion);
   } else {
-    const questionDataType = matrixFields.getAttribute("data-type");
-    if (questionDataType === "Radio Button") {
-      const currentRow = questions[currentQuestion].fieldNo;
-      const rows = questions[currentQuestion].matrixRows;
-      readMatrixRow(currentRow, rows);
-    } else if (questionDataType === "Emoji Slider") {
-      startRecord();
-    }
+    // Emoji Slider has no sub question fields.
+    startRecord();
+  }
+};
+
+/**
+ * Get question text
+ * @param {string} questionDataType
+ * @param {HTMLCollection} answerOptions
+ * @param {HTMLElement} matrixField
+ * @returns {string}
+ */
+const getOptionsText = (questionDataType, answerOptions, matrixField) => {
+  let optionsText = "Possible answers are : ";
+  if (questionDataType === "Radio Button") {
+    setMatrixRows(matrixField, "radio");
+    optionsText += options2Text(answerOptions);
+  } else {
+    setMatrixRows(matrixField, "emoji");
+    optionsText += getScaleOptionsText(answerOptions);
+  }
+  return optionsText;
+};
+
+/**
+ * Get answer options
+ * @param {HTMLElement} matrixField
+ * @returns {HTMLCollection}
+ */
+const getAnswerOptions = (matrixField, questionDataType) => {
+  if (questionDataType === "Radio Button") {
+    return matrixField.getElementsByClassName("jfMatrixHeader-item");
+  } else {
+    const answerOptions = matrixField.getElementsByClassName(
+      "jfMatrixScale-sep"
+    )[0];
+    return answerOptions.getElementsByClassName("scaleSep");
+  }
+};
+
+/**
+ * Set matrix rows
+ * @param {HTMLElement} matrixField
+ * @param {string} type
+ */
+const setMatrixRows = (matrixField, type) => {
+  switch (type) {
+    case "radio":
+      setRowsAttribute(getMatrixRowsOfField(matrixField));
+      break;
+    default:
+      // Emoji Slider
+      setRowsAttribute("emoji slider");
   }
 };
 
@@ -103,20 +190,6 @@ const getMatrixRowsOfField = matrixField => {
 };
 
 /**
- * @param {HTMLElement} matrixField
- * @param {string} type
- */
-const setMatrixRows = (matrixField, type) => {
-  switch (type) {
-    case "radio":
-      setRowsAttribute(getMatrixRowsOfField(matrixField));
-      break;
-    default:
-      setRowsAttribute("emoji slider");
-  }
-};
-
-/**
  * @param {HTMLElement,string} rowValue
  */
 const setRowsAttribute = rowValue => {
@@ -126,7 +199,7 @@ const setRowsAttribute = rowValue => {
 /**
  * @param {string} text
  */
-const speakText = text => {
+const speaknReadQuestionOption = text => {
   setTimeout(function() {
     const msg = new SpeechSynthesisUtterance(text);
     window.speechSynthesis.speak(msg);
@@ -134,6 +207,15 @@ const speakText = text => {
       readQuestionOptions();
     };
   }, 1000);
+};
+
+/**
+ * @returns {boolean}
+ */
+const getSubQuestion = (currentRow, rows) => {
+  return rows[currentRow]
+    .getElementsByClassName("jfMatrixTable-cell")[0]
+    .getElementsByTagName("div")[0].innerHTML;
 };
 
 /**
@@ -180,29 +262,43 @@ const options2Text = options => {
 };
 
 /**
- * @param {HTMLCollection} questionFields
+ * @param {object} question
  */
-const readAnswerOptions = questionFields => {
-  const matrixField = questionFields;
-  const questionDataType = questionFields.getAttribute("data-type");
-  let optionsText = "Possible answers are : ";
-  if (questionDataType === "Radio Button") {
-    const answerOptions = matrixField.getElementsByClassName(
-      "jfMatrixHeader-item"
-    );
-    setMatrixRows(matrixField, "radio");
-    optionsText += options2Text(answerOptions);
-    speakText(optionsText);
-  } else if (questionDataType === "Emoji Slider") {
-    let answerOptions = questionFields.getElementsByClassName(
-      "jfMatrixScale-sep"
-    )[0];
-    setMatrixRows(matrixField, "emoji");
-    answerOptions = answerOptions.getElementsByClassName("scaleSep");
-    answerOptions = getScaleOptionsText(answerOptions);
-    optionsText += answerOptions;
-    speakText(optionsText);
+const readMultipleFieldOptions = question => {
+  const { questionFields, fieldNo } = question;
+  const field = questionFields[fieldNo];
+  const subQuestion = getSubQuestion$1(field);
+  speakAndStartRecord(subQuestion);
+};
+
+const getSubQuestion$1 = field => {
+  let options = "";
+  if (field.getAttribute("data-type") === "mixed-dropdown") {
+    options = "Possible options are " + getDropdownOptions(field);
+    openDropdownMenu$1(field);
   }
+  return field.getElementsByTagName("label")[0].innerHTML + options;
+};
+
+/**
+ * @param {HTMLElement} field
+ * @returns {string}
+ */
+const getDropdownOptions = field => {
+  const dropdownOptions = field.getElementsByTagName("option");
+  let optionsText = "";
+  for (let option of dropdownOptions) {
+    optionsText += option.getAttribute("value") + " , ";
+  }
+  return optionsText;
+};
+
+/**
+ * @param {HTMLElement} dropdownField
+ */
+const openDropdownMenu$1 = dropdownField => {
+  const dropDownToggle = getDropdownToggle$1(dropdownField);
+  dropDownToggle.click();
 };
 
 /**
@@ -215,54 +311,36 @@ const getDropdownToggle$1 = dropdownField => {
 };
 
 /**
- * @param {HTMLElement} dropdownField
+ * Read multiple optional fields
+ * @param {object} question
  */
-const openDropdownMenu$1 = dropdownField => {
-  const dropDownToggle = getDropdownToggle$1(dropdownField);
-  dropDownToggle.click();
+const readMultipleOptionalFields = question => {
+  const { questionFields } = question;
+  const options = getOptions(questionFields);
+  const optionsText = getOptionsText$1(options);
+  speakAndStartRecord(optionsText);
 };
 
 /**
- * @param {HTMLElement} field
+ * Get options
+ * @param {HTMLElement} questionFields
+ * @returns {array}
  */
-const readDropdown = field => {
-  const dropdownOptions = field.getElementsByTagName("option");
-  let optionsText = "";
-  for (let option of dropdownOptions) {
-    const optionValue = option.getAttribute("value");
-    optionsText += optionValue + " , ";
-  }
-  return optionsText.substring(0, optionsText.length - 3);
-};
-
-const readMultipleFieldOptions = question => {
-  stopRecord();
-  const { questionFields, fieldNo } = question;
-  const field = questionFields[fieldNo];
-  setTimeout(function() {
-    let options = "";
-    if (field.getAttribute("data-type") === "mixed-dropdown") {
-      options = ", Possible options are,  " + readDropdown(field);
-      openDropdownMenu$1(field);
-    }
-    const subQuestion =
-      field.getElementsByTagName("label")[0].innerHTML + options;
-    const msg = new SpeechSynthesisUtterance(subQuestion);
-    window.speechSynthesis.speak(msg);
-    msg.onend = function() {
-      startRecord();
-    };
-  }, 1000);
-};
-
-const readMultipleOptionalFields = question => {
-  stopRecord();
-  const { questionFields } = question;
+const getOptions = questionFields => {
   const options = [];
   for (let f of questionFields) {
     options.push(f.getElementsByTagName("input")[0]);
   }
-  let optionsText = "Possible options are : ";
+  return options;
+};
+
+/**
+ * Get options text
+ * @param {array} options
+ * @returns {string}
+ */
+const getOptionsText$1 = options => {
+  let optionsText = "";
   for (let option of options) {
     const tempValue = option.value.toLowerCase();
     const indexOfImage = tempValue.indexOf("|");
@@ -270,76 +348,7 @@ const readMultipleOptionalFields = question => {
       indexOfImage > 0 ? tempValue.substring(0, indexOfImage) : tempValue;
     optionsText += optionValue + " , ";
   }
-  const optionsMessage = new SpeechSynthesisUtterance(optionsText);
-  window.speechSynthesis.speak(optionsMessage);
-  optionsMessage.onend = function() {
-    startRecord();
-  };
-};
-
-const wordMap = {
-  number: {
-    zero: "0",
-    two: "2",
-    three: "3",
-    four: "4",
-    five: "5",
-    six: "6",
-    seven: "7",
-    eight: "8",
-    nine: "9"
-  },
-  month: {
-    january: "01",
-    february: "02",
-    march: "03",
-    april: "04",
-    may: "05",
-    june: "06",
-    july: "07",
-    august: "08",
-    september: "09",
-    october: "10",
-    november: "11",
-    december: "12"
-  },
-  punctuation: {
-    dot: ".",
-    point: ".",
-    comma: ",",
-    dash: "-",
-    at: "@",
-    colon: ":",
-    semicolon: ";",
-    slash: "/"
-  },
-  multipleFieldWidgets: [
-    "control_dropdown",
-    "control_matrix",
-    "control_imagechoice",
-    "control_checkbox",
-    "control_radio",
-    "control_fullname",
-    "control_phone",
-    "control_address",
-    "control_mixed"
-  ],
-  readOptionsFunctions: {
-    control_fullname: readMultipleFieldOptions,
-    control_mixed: readMultipleFieldOptions,
-    control_phone: readMultipleFieldOptions,
-    control_address: readMultipleFieldOptions,
-    control_radio: readMultipleOptionalFields,
-    control_checkbox: readMultipleOptionalFields,
-    control_imagechoice: readMultipleOptionalFields,
-    control_dropdown: readDropdownOptions,
-    control_matrix: readMatrixOptions
-  },
-  endFormMessage:
-    "This is end of the form. If you want to check your answers,  please give 'Check Answers' command. Or you can submit,  with 'Submit' command .",
-  optionalEndFormMessage:
-    ". If you want to listen again, please give 'Check Answers' command. Or you can submit with 'Submit' command.' ",
-  specialNames: { JotForm: ["john form", "job form", "job farm", "job forum"] }
+  return "Possible options are : " + optionsText;
 };
 
 /**
@@ -372,7 +381,6 @@ const filterCommand = command => {
   command = command.trim();
   command = command.toLowerCase();
   command = wordToNumber(command);
-  command = wordToSpecialName(command);
   command = areQuestionsActive(command);
   return command;
 };
@@ -383,27 +391,6 @@ const filterCommand = command => {
  */
 const wordToNumber = command => {
   command = command2WordMap(command, "number");
-  return command;
-};
-
-/**
- * @param {string} command
- * @returns {string}
- */
-const wordToSpecialName = command => {
-  const map = wordMap["specialNames"];
-  console.log("Bak 1 : ");
-  console.log(command);
-  Object.keys(map).forEach(key => {
-    const failSpecialWords = map[key];
-    for (let word of failSpecialWords) {
-      if (command.includes(word)) {
-        console.log("Bak 2 : ");
-        console.log(word);
-        command = command.replace(word, key);
-      }
-    }
-  });
   return command;
 };
 
@@ -422,7 +409,7 @@ const command2WordMap = (command, mapType) => {
 };
 
 /**
- * Changes command next to start if questions are not active.
+ * Changes command with start if questions are not active and command is next.
  * @param {string} command
  * @returns {string}
  */
@@ -599,7 +586,17 @@ const getQuestionFields = questionNumber => {
 };
 
 /**
+ * @param {HTMLElement} jfField
+ * @param {string} tagName
+ * @return {HTMLCollection}
+ */
+const getElementByTagName = (jfField, tagName) => {
+  return jfField.getElementsByTagName(tagName);
+};
+
+/**
  * Get header text
+ * @returns {string}
  */
 const getHeaderText = () => {
   return document.getElementsByClassName("jfWelcome-header form-header")[0]
@@ -608,6 +605,7 @@ const getHeaderText = () => {
 
 /**
  * Get subheader text
+ * @returns {string}
  */
 const getSubHeaderText = () => {
   return document.getElementsByClassName(
@@ -617,6 +615,7 @@ const getSubHeaderText = () => {
 
 /**
  * Get header message
+ * @returns {string}
  */
 const getHeaderMessage = () => {
   const headerText = getHeaderText();
@@ -625,11 +624,1015 @@ const getHeaderMessage = () => {
 };
 
 /**
+ * Controls is last header
  * @param {HTMLElement} {button}
  * @returns {boolean}
  */
 const isLastHeader = button => {
   return button.getAttribute("class").includes("forNext-heading");
+};
+
+/**
+ * Controls if is last question or not
+ * @returns {boolean}
+ */
+const isLastQuestion = button => {
+  return window.currentQuestion + 1 >= window.questions.length;
+};
+
+/**
+ * Checks is end of the form or not
+ * @param {object} {question}
+ * @returns {boolean}
+ */
+const isEndOfTheForm = question => {
+  return (
+    window.currentQuestion === window.questionCount - 1 &&
+    question.fieldNo === question.questionFields.length - 1
+  );
+};
+
+/**
+ * Fill dropdown
+ * @param {object} question
+ */
+const fillDropdown = (question, answer) => {
+  answer = answer === "delete" ? "" : answer;
+  const options = getDropdownOptions$1(question);
+  for (let option of options) {
+    const optionValue = option.innerHTML.toLowerCase();
+    if (answer === optionValue) {
+      question.answer = answer;
+      option.click();
+    }
+  }
+};
+
+/**
+ * Get dropdown options
+ * @param {object} question
+ * @returns {HTMLCollection}
+ */
+const getDropdownOptions$1 = question => {
+  const { questionFields } = question;
+  const field = questionFields[0];
+  const input = getElementByTagName(field, "select")[0];
+  const dropDownName = input.name;
+  const dropDownOptions = getAllElementsWithAttributeValue(
+    "ul",
+    "name",
+    dropDownName
+  )[0].getElementsByTagName("li");
+  return dropDownOptions;
+};
+
+/**
+ * Get elements which equals specified attribute value
+ * @param {string} tagName
+ * @param {string} attribute
+ * @param {string} attributeValue
+ * @return {HTMLCollection}
+ */
+const getAllElementsWithAttributeValue = (
+  tagName,
+  attribute,
+  attributeValue
+) => {
+  const matchingElements = [];
+  const allElements = document.getElementsByTagName(tagName);
+  for (let element of allElements) {
+    const elementValue = element.getAttribute(attribute);
+    if (elementValue === attributeValue) {
+      matchingElements.push(element);
+    }
+  }
+  return matchingElements;
+};
+
+/**
+ * Fill multiple field questions (ex: fullname, phone, address, mixed)
+ * @param {object} question
+ * @param {string} answer
+ */
+const fillMultipleFieldQuestion = (question, answer) => {
+  if (answer === "delete") {
+    deleteField(question);
+  } else if (answer === "skip") {
+    skipField(question);
+  } else {
+    fillField(question, answer);
+    navigateNextField(question);
+  }
+};
+
+/**
+ * Delete field
+ * @param {object} question
+ */
+const deleteField = question => {
+  const { questionFields } = question;
+  for (let f of questionFields) {
+    const fieldDataType = f.getAttribute("data-type");
+    if (isDropDownField(fieldDataType)) {
+      clearDropdown(fieldDataType);
+    } else {
+      clearInput(f);
+    }
+  }
+  question.fieldNo = 0;
+  focusField(questionFields, 0);
+};
+
+/**
+ * Skip field
+ * @param {object} question
+ */
+const skipField = question => {
+  const { questionFields, fieldNo } = question;
+  if (isLastField(fieldNo, questionFields)) {
+    question.fieldNo = 0;
+    clickNext();
+  } else {
+    question.fieldNo += 1;
+    focusField(questionFields, fieldNo + 1);
+  }
+};
+
+/**
+ * Fill field
+ * @param {object} questions
+ */
+const fillField = (question, answer) => {
+  const { field, input, dataType } = getCurrentFieldData(question);
+  if (isDropDownField(dataType)) {
+    field.answer = fillDropdown$1(answer, dataType);
+  } else if (dataType === "email") {
+    answer = answer2Email(answer);
+    fillInput(input, field, answer);
+  } else {
+    answer = formatAnswerCaseRule(answer);
+    fillInput(input, field, answer);
+  }
+};
+
+/**
+ * Next question field
+ * @param {object} questions
+ */
+const navigateNextField = question => {
+  const { questionFields, fieldNo } = question;
+  if (!isLastField(fieldNo, questionFields)) {
+    question.fieldNo += 1;
+    focusField(questionFields, fieldNo + 1);
+  }
+};
+
+/**
+ * Get current field data
+ * @param {object} question
+ * @returns {object}
+ */
+const getCurrentFieldData = question => {
+  const { questionFields, fieldNo } = question;
+  const field = questionFields[fieldNo];
+  const input = getElementByTagName(field, "input")[0];
+  const dataType = field.getAttribute("data-type");
+  return { field, input, dataType };
+};
+
+/**
+ * Controls if field is dropdown
+ * @param {string} currentDataType
+ * @returns {boolean}
+ */
+const isDropDownField = currentDataType => {
+  return currentDataType === "country" || currentDataType === "mixed-dropdown";
+};
+
+/**
+ * @param {string} answer
+ * @param {string} currentDataType
+ * @return {string}
+ */
+const fillDropdown$1 = (answer, currentDataType) => {
+  const options = getOptions$1(currentDataType);
+  for (let option of options) {
+    const optionValue = option.getAttribute("data-value").toLowerCase();
+    if (answer.toLowerCase() === optionValue) {
+      option.click();
+      return answer;
+    }
+  }
+};
+
+/**
+ * Clear input
+ * @param {HTMLElement} field
+ */
+const clearInput = field => {
+  const input = getElementByTagName(field, "input")[0];
+  input.value = "";
+  field.className = field.className.replace(" isFilled", "");
+};
+
+/**
+ * Fill input
+ * @param {HTMLElement} input
+ * @param {HTMLElement} jfField
+ * @param {string} answer
+ */
+const fillInput = (input, jfField, answer) => {
+  input.value = answer;
+  jfField.className += " isFilled";
+  jfField.answer = answer;
+};
+
+/**
+ * Clear dropdown by clicking default option
+ * @param {string} currentDataType
+ */
+const clearDropdown = currentDataType => {
+  const options = getOptions$1(currentDataType);
+  options[0].click();
+};
+
+/**
+ * Controls if field is last
+ * @param {number} fieldNo
+ * @param {HTMLCollection} field
+ * @returns {boolean}
+ */
+const isLastField = (fieldNo, field) => {
+  return fieldNo === field.length - 1;
+};
+
+/**
+ * Focus field
+ * @param {HTMLCollection} questionFields
+ * @param {number} fieldNo
+ */
+const focusField = (questionFields, fieldNo) => {
+  const nextField = questionFields[fieldNo];
+  const nextInput = nextField.querySelectorAll("input,select")[0];
+  nextInput.focus();
+  readQuestionOptions();
+};
+
+/**
+ * Get options
+ * @param {string} currentDataType
+ */
+const getOptions$1 = currentDataType => {
+  return getAllElementsWithAttributeValue(
+    "ul",
+    "data-component",
+    currentDataType
+  )[0].getElementsByTagName("li");
+};
+
+/**
+ * Fill radio
+ * @param {object} question
+ * @param {string} answer
+ */
+const fillRadio = (question, answer) => {
+  const { questionFields } = question;
+  const radioFields = questionFields;
+  for (let field of radioFields) {
+    const radioOption = getElementByTagName(field, "input")[0];
+    const optionValue = radioOption.defaultValue.toLowerCase();
+    if (answer === optionValue) {
+      question.answer = answer;
+      radioOption.click();
+      if (isLastQuestion()) {
+        readEndOfTheFormMessage();
+      } else {
+        window.currentQuestion += 1;
+        readQuestionHeader();
+      }
+    }
+  }
+};
+
+/**
+ * Fill checkbox
+ * @param {object} question
+ */
+const fillCheckBox = (question, answer) => {
+  const options = getOptions$2(question);
+  for (let option of options) {
+    const optionValue = option.value.toLowerCase();
+    if (answer === optionValue) {
+      option.click();
+      question.answer = answer;
+    }
+  }
+};
+
+/**
+ * Get checkbox options
+ * @param {object} question
+ * @returns {HTMLElement}
+ */
+const getOptions$2 = question => {
+  const { questionFields } = question;
+  const options = [];
+  for (let field of questionFields) {
+    const fieldInput = getFieldInput(field);
+    options.push(fieldInput);
+  }
+  return options;
+};
+
+/**
+ * Get field input
+ * @param {HTMLElement} field
+ * @returns {HTMLElement}
+ */
+const getFieldInput = field => {
+  return field.getElementsByTagName("input")[0];
+};
+
+/**
+ * Fill image choice
+ * @param {object} question
+ * @param {string} answer
+ */
+const fillImageChoice = (question, answer) => {
+  const { questionFields } = question;
+  const radioFields = questionFields;
+  for (let field of radioFields) {
+    const radioOption = getElementByTagName(field, "input")[0];
+    const optionValue = getOptionValue(radioOption);
+    if (answer === optionValue) {
+      selectOption(radioOption, answer, question);
+    }
+  }
+};
+
+/**
+ * Get option value
+ * @param {HTMLElement} radioOption
+ * @returns {string}
+ */
+const getOptionValue = radioOption => {
+  const radioValue = radioOption.value;
+  const indexOfImage = radioValue.indexOf("|");
+  return indexOfImage > 0
+    ? radioValue.substring(0, indexOfImage).toLowerCase()
+    : radioValue.toLowerCase();
+};
+
+/**
+ * Select option
+ * @param {HTMLElement} radioOption
+ * @param {string} answer
+ * @param {object} question
+ */
+const selectOption = (radioOption, answer, question) => {
+  question.answer = answer;
+  radioOption.click();
+  window.currentQuestion += 1;
+  readQuestionHeader();
+};
+
+/**
+ * Fill matrix question
+ * @param {object} question
+ * @param {string} answer
+ */
+const fillMatrixQuestion = (question, answer) => {
+  const { matrixRows } = question;
+  if (matrixRows === "emoji slider") {
+    fillEmojiSlider(question, answer);
+  } else {
+    //Matrix
+    fillMatrix(question, answer);
+  }
+};
+
+/**
+ * Fill emoji slider
+ * @param {object} question
+ * @param {string} answer
+ */
+const fillEmojiSlider = (question, answer) => {
+  answer = answer.replace("%", "");
+  const scales = getScales(question);
+  for (let scale of scales) {
+    const scaleValue = getScaleValue$1(scale);
+    if (scaleValue === answer) {
+      fillSlider(scale, scaleValue);
+      question.answer = answer;
+    } else if (isValidPercentageType(answer)) {
+      //Do nothing
+      scale.className = scale.className.replace(" isVisible", "");
+    }
+  }
+};
+
+/**
+ * Fill mamtrix
+ * @param {HTMLElement} emojiField
+ * @param {HTMLCollection} fieldNo
+ */
+const fillMatrix = (question, answer) => {
+  if (answer === "skip") {
+    skipField$1(question);
+  } else {
+    fillField$1(question, answer);
+  }
+};
+
+/**
+ * Fill field
+ * @param {object} question
+ * @param {string} answer
+ */
+const fillField$1 = (question, answer) => {
+  const { matrixRows, fieldNo } = question;
+  const answerInputs = matrixRows[fieldNo].getElementsByTagName("input");
+  for (let input of answerInputs) {
+    const inputValue = input.value.toLowerCase();
+    if (inputValue === answer) {
+      input.click();
+      question.answer = answer;
+      if (!isLastField$1(fieldNo, matrixRows)) {
+        question.fieldNo += 1;
+        readQuestionOptions();
+      }
+    }
+  }
+};
+
+/**
+ * Skip field
+ * @param {object} question
+ */
+const skipField$1 = question => {
+  const { fieldNo, matrixRows } = question;
+  if (isLastField$1(fieldNo, matrixRows)) {
+    question.fieldNo = 0;
+    question.matrixRows = undefined;
+    clickNext();
+  } else {
+    question.fieldNo += 1;
+    readQuestionOptions();
+  }
+};
+
+/**
+ * Controls if field is last
+ * @param {number} fieldNo
+ * @param {HTMLCollection} matrixRows
+ * @returns {boolean}
+ */
+const isLastField$1 = (fieldNo, matrixRows) => {
+  return fieldNo === matrixRows.length - 1;
+};
+
+/**
+ * Get slider field value
+ * @param {HTMLElement} scale
+ * @returns {string}
+ */
+const getScaleValue$1 = scale => {
+  return scale.getAttribute("data-scale").replace(".00", "");
+};
+
+/**
+ * Get scales
+ * @param {object} question
+ * @returns {HTMLCollection}
+ */
+const getScales = question => {
+  const { questionFields } = question;
+  const emojiField = questionFields[0];
+  return getAllElementHasAttribute(
+    emojiField.getElementsByTagName("button")[0],
+    "div",
+    "data-scale"
+  );
+};
+
+/**
+ * Get all html elements which has specified attribute
+ * @param {string} jField
+ * @param {string} tagName
+ * @param {string} attribute
+ * @return {HTMLCollection}
+ */
+const getAllElementHasAttribute = (jField, tagName, attribute) => {
+  const matchingElements = [];
+  const allElements = jField.getElementsByTagName(tagName);
+  for (let element of allElements) {
+    if (element.getAttribute(attribute) !== null) {
+      matchingElements.push(element);
+    }
+  }
+  return matchingElements;
+};
+
+/**
+ * Fill slider
+ * @param {HTMLElement} scale
+ * @param {string} dataScale
+ */
+const fillSlider = (scale, dataScale) => {
+  scale.className = scale.className + " isVisible";
+  scale.parentElement.parentElement.setAttribute(
+    "style",
+    "width : " + dataScale + "%"
+  );
+};
+
+/**
+ * Controls if answer has valid percentage value
+ * @param {string} answer
+ * @returns {boolean}
+ */
+const isValidPercentageType = answer => {
+  return answer.indexOf("%") >= 0;
+};
+
+/**
+ * Fill rating
+ * @param {object} question
+ * @param {string} answer
+ */
+const fillRating = (question, answer) => {
+  const { questionFields } = question;
+  const field = questionFields[0];
+  const ratingOptions = getElementByTagName(field, "li");
+  for (let option of ratingOptions) {
+    const optionValue = option.getAttribute("data-value");
+    if (optionValue === answer) {
+      question.answer = answer;
+      const ratingButton = getRatingOptionButton(option);
+      ratingButton.click();
+      if (isLastQuestion()) {
+        readEndOfTheFormMessage();
+      } else {
+        window.currentQuestion += 1;
+        readQuestionHeader();
+      }
+    }
+  }
+};
+
+/**
+ * Get rating option button
+ * @param {HTMLElement} option
+ * @returns {HTMLElement}
+ */
+const getRatingOptionButton = option => {
+  return getElementByTagName(option, "input")[0];
+};
+
+/**
+ * Fill text area
+ * @param {object} question
+ * @param {string} answer
+ */
+const fillTextarea = (question, answer) => {
+  const inputArea = getInputArea(question);
+  answer = answer === "delete" ? "" : answer;
+  inputArea.innerHTML = answer;
+};
+
+/**
+ * Get input area
+ * @param {object} question
+ * @returns {HTMLElement}
+ */
+const getInputArea = question => {
+  const { questionFields } = question;
+  const textField = questionFields[0];
+  const inputArea = textField.getElementsByClassName("jfTextarea-editor")[0];
+  return inputArea === undefined
+    ? getElementByTagName(textField, "textarea")[0]
+    : inputArea;
+};
+
+/**
+ * Fill email
+ * @param {object} question
+ * @param {string} answer
+ */
+const fillEmail = (question, answer) => {
+  const { questionFields } = question;
+  const emailElement = questionFields[0];
+  const emailInput = getElementByTagName(emailElement, "input")[0];
+  if (answer === "delete") {
+    clearInput$1(emailInput, emailElement);
+  } else {
+    const prevValue = emailInput.value;
+    answer = answer2Email(answer);
+    fillInput$1(emailInput, emailElement, answer, prevValue);
+    question.answer = emailInput.value;
+  }
+};
+
+/**
+ * Clear email input
+ * @param {HTMLElement} input
+ * @param {HTMLElement} jfField
+ */
+const clearInput$1 = (input, jfField) => {
+  input.value = "";
+  jfField.className = jfField.className.replace(" isFilled", "");
+};
+
+/**
+ * Fill email input
+ * @param {HTMLElement} input
+ * @param {HTMLElement} jfField
+ * @param {string} answer
+ * @param {string} prevValue
+ */
+const fillInput$1 = (input, jfField, answer, prevValue) => {
+  input.value = prevValue !== undefined ? prevValue + answer : answer;
+  jfField.className += " isFilled";
+  jfField.answer = answer;
+};
+
+/**
+ * Fill textbox
+ * @param {object} question
+ */
+const fillTextbox = (question, answer) => {
+  const textBoxInput = getTextboxInput(question);
+  if (answer === "delete") {
+    clearTextBox(textBoxInput);
+  } else {
+    const prevValue = textBoxInput.value;
+    question.answer = fillText(textBoxInput, answer, prevValue);
+  }
+};
+
+/**
+ * Get textbox input
+ * @param {object} question
+ * @returns {HTMLElement}
+ */
+const getTextboxInput = question => {
+  const { questionFields } = question;
+  const textBoxField = questionFields[0];
+  return getElementByTagName(textBoxField, "input")[0];
+};
+
+/**
+ * Clear textbox.
+ * @param {HTMLElement} textBoxInput
+ */
+const clearTextBox = textBoxInput => {
+  textBoxInput.value = "";
+  textBoxInput.parentElement.className = textBoxInput.parentElement.className.replace(
+    " isFilled",
+    ""
+  );
+};
+
+/**
+ * @param {HTMLElement} textBoxInput
+ * @param {string} answer
+ * @param {string} prevValue
+ * @returns {string}
+ */
+const fillText = (textBoxInput, answer, prevValue) => {
+  answer = formatAnswerCaseRule$1(answer, prevValue);
+  textBoxInput.value = answer;
+  textBoxInput.parentElement.className += " isFilled";
+  return answer;
+};
+
+/**
+ * Format answer according to case rule
+ * @param {string} answer
+ * @param {string} prevValue
+ * @returns {string}
+ */
+const formatAnswerCaseRule$1 = (answer, prevValue) => {
+  const firstLetter = answer.substring(0, 1).toUpperCase();
+  return prevValue !== ""
+    ? prevValue + firstLetter + answer.substring(1) + ". "
+    : firstLetter + answer.substring(1) + ". ";
+};
+
+/**
+ * Read multiple optional fields
+ * @param {object} question
+ */
+const fillYesno = (question, answer) => {
+  const yesNoOptions = getYesnoOptions(question);
+  for (let option of yesNoOptions) {
+    const optionValue = option.value.toLowerCase();
+    if (answer === optionValue) {
+      question.answer = answer;
+      option.click();
+      window.currentQuestion += 1;
+      readQuestionHeader();
+    }
+  }
+};
+
+/**
+ * Get yes no question options
+ * @param {object} question
+ * @returns {HTMLAllCollection}
+ */
+const getYesnoOptions = question => {
+  const { questionFields } = question;
+  const yesnoField = questionFields[0];
+  return getElementByTagName(yesnoField, "input");
+};
+
+/**
+ * Fill number
+ * @param {object} question
+ * @param {string} answer
+ */
+const fillNumber = (question, answer) => {
+  const numberInput = getNumberInput(question);
+  answer = parseAnswerToNumber(answer);
+  numberInput.value = answer;
+  question.answer = answer;
+};
+
+/**
+ * Get number input area
+ * @param {object} question
+ * @returns {HTMLElement}
+ */
+const getNumberInput = question => {
+  const { questionFields } = question;
+  const numberField = questionFields[0];
+  return getElementByTagName(numberField, "input")[0];
+};
+
+/**
+ * Parse answer to number
+ * @param {string} answer
+ * @returns {number}
+ */
+const parseAnswerToNumber = answer => {
+  try {
+    answer = parseInt(answer, 10);
+    return answer;
+  } catch (err) {
+    console.log("Answer is not valid for number type question.");
+    return 0;
+  }
+};
+
+/**
+ * Fill datetime
+ * @param {object} question
+ * @param {object} answer
+ */
+const fillDatetime = (question, answer) => {
+  const dateAnswer = answer2Date(answer);
+  const datetimeField = getDateTimeField(question);
+  datetimeField.value = dateAnswer;
+  question.answer = dateAnswer;
+};
+
+/**
+ * Get datetime field
+ * @param {object} question
+ * @returns {HTMLElement}
+ */
+const getDateTimeField = question => {
+  const { questionFields } = question;
+  const datetimeField = questionFields[0];
+  return datetimeField.getElementsByTagName("input")[0];
+};
+
+/**
+ * Fill time
+ * @param {object} question
+ * @param {string} answer
+ */
+const fillTimeQuestion = (question, answer) => {
+  const timeDataArray = getTimeData(question);
+  if (answer === "delete") {
+    clearTime(timeDataArray);
+  } else {
+    fillTimeFields(timeDataArray, answer);
+    question.answer = answer;
+  }
+};
+
+/**
+ * Time data array
+ * 0: Hour
+ * 1: Minute
+ * 2: Pm or Am
+ * @param {object} question
+ * @param {array}
+ */
+const getTimeData = question => {
+  let timeDataArray = [];
+  const { questionFields } = question;
+  for (let field of questionFields) {
+    const fieldOptions = field.getElementsByTagName("option");
+    const fieldSpan = field.getElementsByTagName("span")[0];
+    timeDataArray.push({ fieldOptions, fieldSpan });
+  }
+  return timeDataArray;
+};
+
+/**
+ * Clear time fields
+ * @param {HTMLElement} options
+ * @param {HTMLElement} span
+ */
+const clearTime = timeDataArray => {
+  for (let field of timeDataArray) {
+    clearTimeInput(field.fieldOptions, field.fieldSpan);
+  }
+};
+
+/**
+ * Clear time input
+ * @param {HTMLElement} options
+ * @param {HTMLElement} span
+ */
+const clearTimeInput = (options, span) => {
+  for (let option of options) {
+    option.removeAttribute("selected");
+    span.innerHTML = "";
+  }
+};
+
+/**
+ * Fill time fields
+ * @param {array} timeDataArray
+ * @param {string} answer
+ */
+const fillTimeFields = (timeDataArray, answer) => {
+  const answerArray = getTimeAnswers(answer);
+  let index = 0;
+  for (let field of timeDataArray) {
+    fillTimeInput(field.fieldOptions, answerArray[index], field.fieldSpan);
+    index += 1;
+  }
+};
+
+/**
+ * Fill time input
+ * @param {HTMLCollection} options
+ * @param {string} value
+ * @param {HTMLElement} span
+ */
+const fillTimeInput = (options, value, span) => {
+  for (let option of options) {
+    if (value === option.value) {
+      option.setAttribute("selected", "true");
+      span.innerHTML = option.innerHTML;
+    } else {
+      option.removeAttribute("selected");
+    }
+  }
+};
+
+/**
+ * Get all time answers
+ * @param {string} answer
+ * @returns {array}
+ */
+const getTimeAnswers = answer => {
+  const splittedAnswer = answer.split(" ").filter(ans => ans.includes(":"));
+  const hourMinute = splittedAnswer[0];
+  const hourMinuteArr = hourMinute.split(":");
+  const hourValue = hourMinuteArr[0];
+  const minuteValue = hourMinuteArr[1];
+  const pmamValue = answer2AmPm(answer);
+  return [hourValue, minuteValue, pmamValue];
+};
+
+const wordMap = {
+  number: {
+    zero: "0",
+    one: "1",
+    two: "2",
+    three: "3",
+    four: "4",
+    five: "5",
+    six: "6",
+    seven: "7",
+    eight: "8",
+    nine: "9"
+  },
+  month: {
+    january: "01",
+    february: "02",
+    march: "03",
+    april: "04",
+    may: "05",
+    june: "06",
+    july: "07",
+    august: "08",
+    september: "09",
+    october: "10",
+    november: "11",
+    december: "12"
+  },
+  punctuation: {
+    dot: ".",
+    point: ".",
+    comma: ",",
+    dash: "-",
+    at: "@",
+    colon: ":",
+    semicolon: ";",
+    slash: "/"
+  },
+  multipleFieldWidgets: [
+    "control_dropdown",
+    "control_matrix",
+    "control_imagechoice",
+    "control_checkbox",
+    "control_radio",
+    "control_fullname",
+    "control_phone",
+    "control_address",
+    "control_mixed"
+  ],
+  formElementFunctions: {
+    control_fullname: {
+      readOptions: readMultipleFieldOptions,
+      fillQuestion: fillMultipleFieldQuestion
+    },
+    control_mixed: {
+      readOptions: readMultipleFieldOptions,
+      fillQuestion: fillMultipleFieldQuestion
+    },
+    control_phone: {
+      readOptions: readMultipleFieldOptions,
+      fillQuestion: fillMultipleFieldQuestion
+    },
+    control_address: {
+      readOptions: readMultipleFieldOptions,
+      fillQuestion: fillMultipleFieldQuestion
+    },
+    control_radio: {
+      readOptions: readMultipleOptionalFields,
+      fillQuestion: fillRadio
+    },
+    control_checkbox: {
+      readOptions: readMultipleOptionalFields,
+      fillQuestion: fillCheckBox
+    },
+    control_imagechoice: {
+      readOptions: readMultipleOptionalFields,
+      fillQuestion: fillImageChoice
+    },
+    control_dropdown: {
+      readOptions: readDropdownOptions,
+      fillQuestion: fillDropdown
+    },
+    control_matrix: {
+      readOptions: readMatrixOptions,
+      fillQuestion: fillMatrixQuestion
+    },
+    control_rating: {
+      readOptions: undefined,
+      fillQuestion: fillRating
+    },
+    control_textarea: {
+      readOptions: undefined,
+      fillQuestion: fillTextarea
+    },
+    control_email: {
+      readOptions: undefined,
+      fillQuestion: fillEmail
+    },
+    control_textbox: {
+      readOptions: undefined,
+      fillQuestion: fillTextbox
+    },
+    control_yesno: {
+      readOptions: undefined,
+      fillQuestion: fillYesno
+    },
+    control_number: {
+      readOptions: undefined,
+      fillQuestion: fillNumber
+    },
+    control_datetime: {
+      readOptions: undefined,
+      fillQuestion: fillDatetime
+    },
+    control_time: {
+      readOptions: undefined,
+      fillQuestion: fillTimeQuestion
+    }
+  },
+  endFormMessage:
+    "This is end of the form. If you want to check your answers,  please give 'Check Answers' command. Or you can submit,  with 'Submit' command .",
+  optionalEndFormMessage:
+    ". If you want to listen again, please give 'Check Answers' command. Or you can submit with 'Submit' command.' "
 };
 
 /**
@@ -679,7 +1682,6 @@ const readQuestionHeader = () => {
         readQuestionOptions();
       };
     }, 1000);
-    // speakAndStartRecord(questionHeader);
   } else {
     speakAndStartRecord(questionHeader);
   }
@@ -690,8 +1692,20 @@ const readQuestionHeader = () => {
  */
 const readQuestionOptions = () => {
   const currentQuestion = getCurrentQuestion();
-  const readFunction = wordMap.readOptionsFunctions[currentQuestion.dataType];
-  readFunction(currentQuestion);
+  const { dataType } = currentQuestion;
+  const readOptionsFunction = getReadOptionsFunction(dataType);
+  readOptionsFunction(currentQuestion, startRecord, stopRecord);
+};
+
+/**
+ * Ger read options function
+ * @param {string} dataType
+ * @return {function}
+ */
+const getReadOptionsFunction = dataType => {
+  console.log("Heyo : ");
+  console.log(dataType);
+  return wordMap.formElementFunctions[dataType].readOptions;
 };
 
 /**
@@ -771,14 +1785,6 @@ const hasMultipleAnswers = answer => {
 };
 
 /**
- * @param {string} answer
- * @returns {string}
- */
-const replaceUndefinedWithEmpty = answer => {
-  return answer.replace("undefined", "empty");
-};
-
-/**
  * Get all answers
  * @returns {string}
  */
@@ -794,7 +1800,7 @@ const getAllAnswers = () => {
       : formatAnswer(qAnswer, qid, qHeader);
     qid += 1;
   }
-  return replaceUndefinedWithEmpty(answersText);
+  return answersText;
 };
 
 /**
@@ -803,8 +1809,6 @@ const getAllAnswers = () => {
 const readAllAnswers = () => {
   const { optionalEndFormMessage } = wordMap;
   const answers = getAllAnswers() + optionalEndFormMessage;
-  console.log("Answers : ");
-  console.log(answers);
   speakAndStartRecord(answers);
 };
 
@@ -950,6 +1954,9 @@ const clickSubmit = () => {
   submitButton.click();
 };
 
+/**
+ * Update questions active
+ */
 const updateQuestionsActive = () => {
   if (window.questionsActive) {
     window.questionsActive = false;
@@ -959,520 +1966,24 @@ const updateQuestionsActive = () => {
 };
 
 /**
- * @param {HTMLElement} input
- * @param {HTMLElement} jfField
- * @param {string} answer
- * @param {string} prevValue
- */
-const fillInput = (input, jfField, answer, prevValue) => {
-  input.value = prevValue !== undefined ? prevValue + answer : answer;
-  jfField.className += " isFilled";
-  jfField.answer = input.value;
-};
-
-/**
- * @param {HTMLElement} textBoxInput
- */
-const clearTextBox = textBoxInput => {
-  textBoxInput.value = "";
-  textBoxInput.parentElement.className = textBoxInput.parentElement.className.replace(
-    " isFilled",
-    ""
-  );
-};
-
-/**
- * @param {HTMLElement} jfField
- * @param {string} tagName
- * @return {HTMLCollection}
- */
-const getElementByTagName = (jfField, tagName) => {
-  return jfField.getElementsByTagName(tagName);
-};
-
-/**
- * @param {string} tagName
- * @param {string} attribute
- * @param {string} attributeValue
- * @return {HTMLCollection}
- */
-const getAllElementsWithAttributeValue = (
-  tagName,
-  attribute,
-  attributeValue
-) => {
-  const matchingElements = [];
-  const allElements = document.getElementsByTagName(tagName);
-  for (let i = 0, n = allElements.length; i < n; i++) {
-    if (allElements[i].getAttribute(attribute) === attributeValue) {
-      matchingElements.push(allElements[i]);
-    }
-  }
-  return matchingElements;
-};
-
-/**
- * @param {string} jField
- * @param {string} tagName
- * @param {string} attribute
- * @return {HTMLCollection}
- */
-const getAllElementHasAttribute = (jField, tagName, attribute) => {
-  const matchingElements = [];
-  const allElements = jField.getElementsByTagName(tagName);
-  for (let i = 0, n = allElements.length; i < n; i++) {
-    if (allElements[i].getAttribute(attribute) !== null) {
-      matchingElements.push(allElements[i]);
-    }
-  }
-  return matchingElements;
-};
-
-/**
- * @param {HTMLElement} textBoxInput
- * @param {string} answer
- * @param {string} prevValue
- * @return {string}
- */
-const fillTextBox = (textBoxInput, answer, prevValue) => {
-  const firstLetter = answer.substring(0, 1).toUpperCase();
-  textBoxInput.value =
-    prevValue !== ""
-      ? prevValue + firstLetter + answer.substring(1) + ". "
-      : firstLetter + answer.substring(1) + ". ";
-  textBoxInput.parentElement.className += " isFilled";
-  return textBoxInput.value;
-};
-
-/**
- * @param {string} answer
- * @param {string} currentDataType
- * @return {string}
- */
-const fillDropdown = (answer, currentDataType) => {
-  const options = getAllElementsWithAttributeValue(
-    "ul",
-    "data-component",
-    currentDataType
-  )[0].getElementsByTagName("li");
-  for (let option of options) {
-    if (
-      answer.toLowerCase() === option.getAttribute("data-value").toLowerCase()
-    ) {
-      option.click();
-      return option.getAttribute("data-value");
-    }
-  }
-};
-
-/**
- * @param {HTMLElement} inputArea
- * @param {string} answer
- */
-const fillTextArea = (inputArea, answer) => {
-  const prevValue = inputArea.innerHTML;
-  const firstLetter = answer.substring(0, 1).toUpperCase();
-  inputArea.innerHTML =
-    prevValue !== ""
-      ? prevValue + firstLetter + answer.substring(1) + ". "
-      : firstLetter + answer.substring(1) + ". ";
-};
-
-/**
- * @param {HTMLElement} input
- * @param {HTMLElement} jfField
- */
-const clearInput = (input, jfField) => {
-  input.value = "";
-  jfField.className = jfField.className.replace(" isFilled", "");
-};
-
-/**
- * @param {string} currentDataType
- */
-const clearDropdown = currentDataType => {
-  const options = getAllElementsWithAttributeValue(
-    "ul",
-    "data-component",
-    currentDataType
-  )[0].getElementsByTagName("li");
-  options[0].click();
-};
-
-/**
- * @param {number} fieldNo
- * @param {HTMLCollection} field
- * @returns {boolean}
- */
-const isLastField = (fieldNo, field) => {
-  return fieldNo === field.length - 1;
-};
-
-/**
- * @param {HTMLCollection} fields
- * @param {number} fieldNo
- */
-const focusField = (fields, fieldNo) => {
-  nextField = fields[fieldNo];
-  nextInput = nextField.querySelectorAll("input,select")[0];
-  nextInput.focus();
-  readQuestionOptions();
-};
-
-/**
- * @param {HTMLElement} emojiField
- * @param {HTMLCollection} fieldNo
- */
-const getScales = emojiField => {
-  return getAllElementHasAttribute(
-    emojiField.getElementsByTagName("button")[0],
-    "div",
-    "data-scale"
-  );
-};
-
-/**
- * @param {HTMLElement} scale
- * @param {string} dataScale
- */
-const fillScale = (scale, dataScale) => {
-  scale.className = scale.className + " isVisible";
-  scale.parentElement.parentElement.setAttribute(
-    "style",
-    "width : " + dataScale + "%"
-  );
-};
-
-/**
- * @param {HTMLElement} field
- */
-const getDropdownOptions = field => {
-  const dropDownName = field.name;
-  const dropDownOptions = getAllElementsWithAttributeValue(
-    "ul",
-    "name",
-    dropDownName
-  )[0].getElementsByTagName("li");
-  return dropDownOptions;
-};
-
-/**
- * @param {HTMLElement} options
- * @param {HTMLElement} span
- */
-const clearTimeInput = (options, span) => {
-  for (let option of options) {
-    option.removeAttribute("selected");
-    span.innerHTML = "";
-  }
-};
-
-/**
- * @param {HTMLCollection} options
- * @param {string} value
- * @param {HTMLElement} span
- */
-const fillTimeInput = (options, value, span) => {
-  for (let option of options) {
-    if (value === option.value) {
-      option.setAttribute("selected", "true");
-      span.innerHTML = option.innerHTML;
-    } else {
-      option.removeAttribute("selected");
-    }
-  }
-};
-
-/**
- * @param {string} answer
- * @returns {JSONObject}
- */
-const getHourMinuteAmPmValues = answer => {
-  const splittedAnswer = answer.split(" ").filter(ans => ans.includes(":"));
-  const hourMinute = splittedAnswer[0];
-  const hourMinuteArr = hourMinute.split(":");
-  const hourValue = hourMinuteArr[0];
-  const minuteValue = hourMinuteArr[1];
-  const pmamValue = answer2AmPm(answer);
-  return { hourValue, minuteValue, pmamValue };
-};
-
-/**
- * @param {string} answer
- * @param {HTMLElement} currentField
- * @param {HTMLElement} currentInput
- */
-const fillField = (answer, currentField, currentInput) => {
-  currentDataType = currentField.getAttribute("data-type");
-  if (currentDataType === "country" || currentDataType === "mixed-dropdown") {
-    currentField.answer = fillDropdown(answer, currentDataType);
-  } else if (currentDataType === "email") {
-    answer = answer2Email(answer);
-    fillInput(currentInput, currentField, answer, "");
-  } else {
-    answer = formatAnswerCaseRule(answer);
-    fillInput(currentInput, currentField, answer, "");
-  }
-};
-
-/**
  * @param {string} answer
  */
 const fillQuestion = answer => {
-  const currentQuestion = window.currentQuestion;
-  const questions = window.questions;
-  const { questionFields, dataType } = questions[currentQuestion];
-  let field = questionFields;
-  const inputType = dataType;
-  if (inputType === "control_rating") {
-    field = field[0];
-    const ratingOptions = getElementByTagName(field, "li");
-    for (let option of ratingOptions) {
-      if (option.getAttribute("data-value") === answer) {
-        questions[currentQuestion].answer = answer;
-        getElementByTagName(option, "input")[0].click();
-        window.currentQuestion += 1;
-        readQuestionHeader();
-        break;
-      }
-    }
-  } else if (inputType === "control_radio") {
-    const radioFields = field;
-    for (let field of radioFields) {
-      const radioOption = getElementByTagName(field, "input")[0];
-      const optionValue = radioOption.defaultValue;
-      if (answer === optionValue.toLowerCase()) {
-        questions[currentQuestion].answer = optionValue;
-        radioOption.click();
-        if (window.currentQuestion + 1 >= window.questions.length) ; else {
-          window.currentQuestion += 1;
-          readQuestionHeader();
-          break;
-        }
-      }
-    }
-  } else if (inputType === "control_textarea") {
-    const textField = field[0];
-    let inputArea = textField.getElementsByClassName("jfTextarea-editor")[0];
-    inputArea =
-      inputArea === undefined
-        ? getElementByTagName(textField, "textarea")[0]
-        : inputArea;
-    if (answer === "delete") {
-      inputArea.innerHTML = "";
-    } else {
-      fillTextArea(inputArea, answer);
-      questions[currentQuestion].answer = inputArea.innerHTML;
-    }
-  } else if (inputType === "control_email") {
-    const emailField = field[0];
-    const emailInput = getElementByTagName(emailField, "input")[0];
-    const prevValue = emailInput.value;
-    if (answer === "delete") {
-      clearInput(emailInput, emailField);
-    } else {
-      answer = answer2Email(answer);
-      fillInput(emailInput, emailField, answer, prevValue);
-      questions[currentQuestion].answer = emailInput.value;
-    }
-  } else if (
-    inputType === "control_fullname" ||
-    inputType === "control_phone" ||
-    inputType === "control_address" ||
-    inputType === "control_mixed"
-  ) {
-    const fields = field;
-    const { fieldNo } = questions[currentQuestion];
-    console.log("questions");
-    console.log(questions);
-    console.log(fieldNo);
-    const currentField = fields[fieldNo];
-    const currentInput = getElementByTagName(currentField, "input")[0];
-    if (answer === "delete") {
-      for (let f of fields) {
-        const fieldDataType = f.getAttribute("data-type");
-        if (fieldDataType === "mixed-dropdown" || fieldDataType === "country") {
-          clearDropdown(fieldDataType);
-        } else {
-          const fieldInput = getElementByTagName(f, "input")[0];
-          clearInput(fieldInput, f);
-        }
-      }
-      questions[currentQuestion].fieldNo = 0;
-      focusField(fields, 0);
-    } else if (answer === "skip") {
-      if (isLastField(fieldNo, field)) {
-        questions[currentQuestion].fieldNo = 0;
-        clickNext();
-      } else {
-        questions[currentQuestion].fieldNo += 1;
-        focusField(fields, fieldNo + 1);
-      }
-    } else {
-      fillField(answer, currentField, currentInput);
-      if (!isLastField(fieldNo, field)) {
-        questions[currentQuestion].fieldNo += 1;
-        focusField(fields, fieldNo + 1);
-      }
-    }
-  } else if (inputType === "control_textbox") {
-    const textBoxField = field[0];
-    const textBoxInput = getElementByTagName(textBoxField, "input")[0];
-    if (answer === "delete") {
-      clearTextBox(textBoxInput);
-    } else {
-      const prevValue = textBoxInput.value;
-      questions[currentQuestion].answer = fillTextBox(
-        textBoxInput,
-        answer,
-        prevValue
-      );
-    }
-  } else if (inputType === "control_dropdown") {
-    const dropdownField = field[0];
-    const dropDownInput = getElementByTagName(dropdownField, "select")[0];
-    const options = getDropdownOptions(dropDownInput);
-    answer = answer === "delete" ? "" : answer;
-    for (let option of options) {
-      if (answer === option.innerHTML.toLowerCase()) {
-        questions[currentQuestion].answer = option.innerHTML;
-        option.click();
-      }
-    }
-  } else if (inputType === "control_yesno") {
-    const yesnoField = field[0];
-    const yesNoOptions = getElementByTagName(yesnoField, "input");
-    for (let option of yesNoOptions) {
-      const optionValue = option.value;
-      if (answer === optionValue.toLowerCase()) {
-        questions[currentQuestion].answer = optionValue;
-        option.click();
-        window.currentQuestion += 1;
-        readQuestionHeader();
-        break;
-      }
-    }
-  } else if (inputType === "control_imagechoice") {
-    const radioFields = field;
-    for (let field of radioFields) {
-      const radioOption = getElementByTagName(field, "input")[0];
-      const radioValue = radioOption.value;
-      const indexOfImage = radioValue.indexOf("|");
-      const optionValue =
-        indexOfImage > 0 ? radioValue.substring(0, indexOfImage) : radioValue;
-      if (answer === optionValue.toLowerCase()) {
-        questions[currentQuestion].answer = optionValue;
-        radioOption.click();
-        window.currentQuestion += 1;
-        readQuestionHeader();
-        break;
-      }
-    }
-  } else if (inputType === "control_checkbox") {
-    const options = [];
-    for (let f of field) {
-      options.push(f.getElementsByTagName("input")[0]);
-    }
-    for (let option of options) {
-      if (answer === option.value.toLowerCase()) {
-        option.click();
-        questions[currentQuestion].answer = option.value;
-        break;
-      }
-    }
-  } else if (inputType === "control_number") {
-    const numberField = field[0];
-    const numberInput = getElementByTagName(numberField, "input")[0];
-    try {
-      answer = parseInt(answer, 10);
-      numberInput.value = answer;
-      questions[currentQuestion].answer = answer;
-    } catch (err) {
-      console.log("Answer is not valid for the question.");
-    }
-  } else if (inputType === "control_datetime") {
-    const datetimeField = field[0];
-    const dateAnswer = answer2Date(answer);
-    datetimeField.getElementsByTagName("input")[0].value = dateAnswer;
-    questions[currentQuestion].answer = dateAnswer;
-  } else if (inputType === "control_matrix") {
-    const { fieldNo, matrixRows } = questions[currentQuestion];
-    const rows = matrixRows;
-    if (matrixRows === "emoji slider") {
-      const emojiField = field[0];
-      const validPercentage = answer.indexOf("%") >= 0;
-      answer = answer.replace("%", "");
-      const scales = getScales(emojiField);
-      for (let scale of scales) {
-        const dataScale = scale.getAttribute("data-scale").replace(".00", "");
-        if (dataScale === answer) {
-          fillScale(scale, dataScale);
-          questions[currentQuestion].answer = dataScale + "%";
-        } else if (validPercentage) {
-          scale.className = scale.className.replace(" isVisible", "");
-        }
-      }
-    } else {
-      if (answer === "skip") {
-        if (fieldNo === rows.length - 1) {
-          questions[currentQuestion].fieldNo = 0;
-          questions[currentQuestion].matrixRows = undefined;
-          clickNext();
-        } else {
-          questions[currentQuestion].fieldNo += 1;
-          readQuestionOptions();
-        }
-      } else {
-        const answerInputs = rows[fieldNo].getElementsByTagName("input");
-        for (let input of answerInputs) {
-          if (input.value.toLowerCase() === answer) {
-            input.click();
-            questions[currentQuestion].answer = input.value;
-            if (fieldNo !== rows.length - 1) {
-              questions[currentQuestion].fieldNo += 1;
-              readQuestionOptions();
-            }
-            break;
-          }
-        }
-      }
-    }
-  } else if (inputType === "control_time") {
-    const { questionFields } = questions[currentQuestion];
-    const hour = questionFields[0];
-    const hourOptions = hour.getElementsByTagName("option");
-    const hourSpan = hour.getElementsByTagName("span")[0];
+  const question = getCurrentQuestion();
+  const { dataType } = question;
+  const fillQuestionFunction = getFillQuestionFunction(dataType);
+  fillQuestionFunction(question, answer);
 
-    const minute = questionFields[1];
-    const minuteOptions = minute.getElementsByTagName("option");
-    const minuteSpan = minute.getElementsByTagName("span")[0];
-
-    const pmOrAm = questionFields[2];
-    const pmOrAmOptions = pmOrAm.getElementsByTagName("option");
-    const pmOrAmSpan = pmOrAm.getElementsByTagName("span")[0];
-
-    if (answer === "delete") {
-      clearTimeInput(hourOptions, hourSpan);
-      clearTimeInput(minuteOptions, minuteSpan);
-      clearTimeInput(pmOrAmOptions, pmOrAmSpan);
-    } else {
-      const { hourValue, minuteValue, pmamValue } = getHourMinuteAmPmValues(
-        answer
-      );
-      fillTimeInput(hourOptions, hourValue, hourSpan);
-      fillTimeInput(minuteOptions, minuteValue, minuteSpan);
-      fillTimeInput(pmOrAmOptions, pmamValue, pmOrAmSpan);
-      questions[currentQuestion].answer =
-        hourValue + " " + minuteValue + " " + pmamValue;
-    }
-  }
-  if (
-    currentQuestion === window.questionCount - 1 &&
-    questions[currentQuestion].fieldNo ===
-      questions[currentQuestion].questionFields.length - 1
-  ) {
+  if (isEndOfTheForm(question)) {
     readEndOfTheFormMessage();
   }
+};
+
+getFillQuestionFunction = dataType => {
+  console.log("dataType");
+  console.log(dataType);
+
+  return wordMap.formElementFunctions[dataType].fillQuestion;
 };
 
 class Speech2Text {

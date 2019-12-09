@@ -10,6 +10,16 @@ This project is voice recognation extension for JotForm. The user controls the c
 - Updating answers
 - Submitting form
 
+### Speacial Commands
+- Start
+- Next
+- Skip
+- Previous
+- Delete
+- Submit
+- Check answers
+
+
 #### Implemented for following form elements :
 * Full Name
 * Email

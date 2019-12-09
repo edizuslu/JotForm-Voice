@@ -30,7 +30,6 @@ const filterCommand = command => {
   command = command.trim();
   command = command.toLowerCase();
   command = wordToNumber(command);
-  command = wordToSpecialName(command);
   command = areQuestionsActive(command);
   return command;
 };
@@ -41,27 +40,6 @@ const filterCommand = command => {
  */
 export const wordToNumber = command => {
   command = command2WordMap(command, "number");
-  return command;
-};
-
-/**
- * @param {string} command
- * @returns {string}
- */
-export const wordToSpecialName = command => {
-  const map = wordMap["specialNames"];
-  console.log("Bak 1 : ");
-  console.log(command);
-  Object.keys(map).forEach(key => {
-    const failSpecialWords = map[key];
-    for (let word of failSpecialWords) {
-      if (command.includes(word)) {
-        console.log("Bak 2 : ");
-        console.log(word);
-        command = command.replace(word, key);
-      }
-    }
-  });
   return command;
 };
 
@@ -80,7 +58,7 @@ export const command2WordMap = (command, mapType) => {
 };
 
 /**
- * Changes command next to start if questions are not active.
+ * Changes command with start if questions are not active and command is next.
  * @param {string} command
  * @returns {string}
  */
