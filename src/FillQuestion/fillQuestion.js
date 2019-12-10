@@ -21,9 +21,11 @@ export const fillQuestion = answer => {
   }
 };
 
+/**
+ * Get fill question function
+ * @param {string} dataType
+ * @returns {function}
+ */
 getFillQuestionFunction = dataType => {
-  console.log("dataType");
-  console.log(dataType);
-
   return wordMap.formElementFunctions[dataType].fillQuestion;
 };

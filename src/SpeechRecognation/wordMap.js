@@ -17,6 +17,14 @@ import { fillYesno } from "../fillQuestionFunctions/fillYesno";
 import { fillNumber } from "../fillQuestionFunctions/fillNumber";
 import { fillDatetime } from "../fillQuestionFunctions/fillDatetime";
 import { fillTimeQuestion } from "../fillQuestionFunctions/fillTimeQuestion";
+import {
+  clickStart,
+  clickNext,
+  clickPrevious,
+  clickSubmit
+} from "../ClickFunctions/clickFunctions";
+import { readAllAnswers } from "../Text2Speech/speaker";
+import { fillQuestion } from "../FillQuestion/fillQuestion";
 
 export const wordMap = {
   number: {
@@ -54,6 +62,14 @@ export const wordMap = {
     colon: ":",
     semicolon: ";",
     slash: "/"
+  },
+  commandFunctions: {
+    start: clickStart,
+    next: clickNext,
+    previous: clickPrevious,
+    submit: clickSubmit,
+    check_answers: readAllAnswers,
+    fill_question: fillQuestion
   },
   multipleFieldWidgets: [
     "control_dropdown",

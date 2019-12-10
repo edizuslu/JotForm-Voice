@@ -16,16 +16,325 @@ const getRecognationObject = () => {
 };
 
 /**
- * @param {object} question
- * @param {function} startRecord
- * @param {function} stopRecord
+ * Set questions array to window
  */
-const readDropdownOptions = (question, startRecord, stopRecord) => {
+const getQuestions = () => {
+  window.questionCount = getQuestionCount();
+  const questions = [];
+  for (let index = 0; index < window.questionCount; index++) {
+    const questionNumber = index;
+    const questionHeader = getQuestionHeader(questionNumber);
+    const questionFields = getQuestionFields(questionNumber);
+    const dataType = getQuestionDataType(questionFields);
+    const fieldNo = 0;
+    questions.push({ questionFields, dataType, questionHeader, fieldNo });
+  }
+  window.questions = questions;
+};
+
+/**
+ * @return {number}
+ */
+const getQuestionCount = () => {
+  let questionCount = document.getElementById("cardProgress-questionCount");
+  questionCount = questionCount.innerHTML;
+  questionCount = removeSpaces(questionCount);
+  return questionCount;
+};
+
+/**
+ * @param {number} questionNumber
+ * @return {string}
+ */
+const getQuestionHeader = questionNumber => {
+  const questionContainer = document.getElementsByClassName(
+    "jsQuestionLabelContainer"
+  );
+  return questionContainer[questionNumber].innerHTML;
+};
+
+/**
+ * @param {array} inputFields
+ * @return {string}
+ */
+const getQuestionDataType = inputFields => {
+  let element = inputFields[0];
+  while (!element.className.includes("form-line")) {
+    element = element.parentElement;
+  }
+  return element.getAttribute("data-type");
+};
+
+/**
+ * @param {number} questionNumber
+ * @return {HTMLCollection}
+ */
+const getQuestionFields = questionNumber => {
+  const questions = document.getElementsByClassName("jfCard-question");
+  const question = questions[questionNumber];
+  const questionFields = question.getElementsByClassName("jfField");
+  return questionFields;
+};
+
+/**
+ * @param {HTMLElement} jfField
+ * @param {string} tagName
+ * @return {HTMLCollection}
+ */
+const getElementByTagName = (jfField, tagName) => {
+  return jfField.getElementsByTagName(tagName);
+};
+
+/**
+ * Get header text
+ * @returns {string}
+ */
+const getHeaderText = () => {
+  return document.getElementsByClassName("jfWelcome-header form-header")[0]
+    .innerHTML;
+};
+
+/**
+ * Get subheader text
+ * @returns {string}
+ */
+const getSubHeaderText = () => {
+  return document.getElementsByClassName(
+    "jfWelcome-description form-subHeader"
+  )[0].innerHTML;
+};
+
+/**
+ * Get header message
+ * @returns {string}
+ */
+const getHeaderMessage = () => {
+  const headerText = getHeaderText();
+  const subHeader = getSubHeaderText();
+  return headerText + " , " + subHeader;
+};
+
+/**
+ * Controls is last header
+ * @param {HTMLElement} {button}
+ * @returns {boolean}
+ */
+const isLastHeader = button => {
+  return button.getAttribute("class").includes("forNext-heading");
+};
+
+/**
+ * Controls if is last question or not
+ * @returns {boolean}
+ */
+const isLastQuestion = button => {
+  return window.currentQuestion + 1 >= window.questions.length;
+};
+
+/**
+ * Checks is end of the form or not
+ * @param {object} {question}
+ * @returns {boolean}
+ */
+const isEndOfTheForm = question => {
+  return (
+    window.currentQuestion === window.questionCount - 1 &&
+    question.fieldNo === question.questionFields.length - 1
+  );
+};
+
+/**
+ * Start record
+ */
+const startRecord = () => {
+  window.recognition.start();
+  window.speechStopped = false;
+};
+
+/**
+ * Stop record
+ */
+const stopRecord = () => {
+  recognition.stop();
+  speechStopped = true;
+};
+
+/**
+ * Speak and start record
+ * @param {string} speakText
+ */
+const speakAndStartRecord = speakText => {
+  stopRecord();
+  setTimeout(function() {
+    const message = new SpeechSynthesisUtterance(speakText);
+    window.speechSynthesis.speak(message);
+    message.onend = function() {
+      startRecord();
+    };
+  }, 1000);
+};
+
+/**
+ * Read question header and read question options if it is optional.
+ */
+const readQuestionHeader = () => {
+  const question = getCurrentQuestion();
+  const { questionHeader, dataType } = question;
+  if (isMultipleFieldWidget(dataType)) {
+    stopRecord();
+    setTimeout(function() {
+      const message = new SpeechSynthesisUtterance(questionHeader);
+      window.speechSynthesis.speak(message);
+      message.onend = function() {
+        question.fieldNo = 0;
+        readQuestionOptions();
+      };
+    }, 1000);
+  } else {
+    speakAndStartRecord(questionHeader);
+  }
+};
+
+/**
+ * Read question options
+ */
+const readQuestionOptions = () => {
+  const currentQuestion = getCurrentQuestion();
+  const { dataType } = currentQuestion;
+  const readOptionsFunction = getReadOptionsFunction(dataType);
+  readOptionsFunction(currentQuestion);
+};
+
+/**
+ * Ger read options function
+ * @param {string} dataType
+ * @return {function}
+ */
+const getReadOptionsFunction = dataType => {
+  return wordMap.formElementFunctions[dataType].readOptions;
+};
+
+/**
+ * Get Current Question
+ * @returns {object}
+ */
+const getCurrentQuestion = () => {
+  const currentQuestion = window.currentQuestion;
+  return window.questions[currentQuestion];
+};
+
+/**
+ * Multiple field widget filter
+ * @param {string} {dataType}
+ * @returns {boolean}
+ */
+const isMultipleFieldWidget = dataType => {
+  const { multipleFieldWidgets } = wordMap;
+  return multipleFieldWidgets.includes(dataType);
+};
+
+/**
+ * Read end of the form message
+ */
+const readEndOfTheFormMessage = () => {
+  const { endFormMessage } = wordMap;
+  speakAndStartRecord(endFormMessage);
+};
+
+/**
+ * Get multiple field answers
+ * ex: Question 5 <Question Header> : <Question Answer 1> <Question Answer 2> ...
+ * @param {string} answer
+ * @returns {string}
+ */
+const getMultipleFieldAnswer = (question, qid, qHeader) => {
+  const fields = question.questionFields;
+  let fieldAnswers = "";
+  for (let field of fields) {
+    const fieldAnswer = field.answer;
+    if (fieldAnswer !== undefined) {
+      fieldAnswers += fieldAnswer + " , ";
+    }
+  }
+  return fieldAnswers;
+};
+
+/**
+ * Format answer
+ * ex: Question 5 <Question Header> : <Question Answer>
+ * @param {string} answer
+ * @returns {string}
+ */
+const formatAnswer = (answer, qid, qHeader) => {
+  if (answer !== "") {
+    return (
+      "Question " +
+      qid +
+      " , " +
+      qHeader +
+      " , " +
+      "Answer is , " +
+      answer +
+      " . "
+    );
+  } else {
+    return "";
+  }
+};
+
+/**
+ * @param {string} answer
+ * @returns {boolean}
+ */
+const hasMultipleAnswers = answer => {
+  return answer === undefined;
+};
+
+/**
+ * Get all answers
+ * @returns {string}
+ */
+const getAllAnswers = () => {
+  const questions = window.questions;
+  let answersText = "";
+  let qid = 1;
+  for (let question of questions) {
+    const qAnswer = question.answer;
+    const qHeader = question.questionHeader;
+    answersText += hasMultipleAnswers(qAnswer)
+      ? formatAnswer(getMultipleFieldAnswer(question), qid, qHeader)
+      : formatAnswer(qAnswer, qid, qHeader);
+    qid += 1;
+  }
+  return answersText;
+};
+
+/**
+ * Read all answers of form.
+ */
+const readAllAnswers = () => {
+  const { optionalEndFormMessage } = wordMap;
+  const answers = getAllAnswers() + optionalEndFormMessage;
+  speakAndStartRecord(answers);
+};
+
+/**
+ * Read Form Header
+ */
+const readHeaderTexts = () => {
+  const headerMessage = getHeaderMessage();
+  speakAndStartRecord(headerMessage);
+};
+
+/**
+ * @param {object}question
+ */
+const readDropdownOptions = question => {
   stopRecord();
   const { questionFields } = question;
   const dropdownField = questionFields[0];
   const optionsText = getDropdownOptionsText(dropdownField);
-  openDropdownNReadOptions(optionsText, dropdownField, startRecord);
+  openDropdownNReadOptions(optionsText, dropdownField);
 };
 
 /**
@@ -44,9 +353,8 @@ const getDropdownOptionsText = dropdownField => {
 /**
  * @param {string} optionsText
  * @param {HTMLElement} dropdownField
- * @param {function} startRecord
  */
-const openDropdownNReadOptions = (optionsText, dropdownField, startRecord) => {
+const openDropdownNReadOptions = (optionsText, dropdownField) => {
   setTimeout(function() {
     openDropdownMenu(dropdownField);
     const msg = new SpeechSynthesisUtterance(optionsText);
@@ -352,304 +660,148 @@ const getOptionsText$1 = options => {
 };
 
 /**
- * @param {Object} event
- * @return {string}
+ * Initialize voice form
  */
-const getCommand = event => {
-  const lastCommand = getLastCommand(event);
-  const command = filterCommand(lastCommand);
-  console.log("Command : ");
-  console.log(command);
-  return command;
+const initializeVoiceForm = () => {
+  getQuestions();
+  setStartButtonListener();
+  setNextnPreviousButtonsListener();
 };
 
 /**
- * @param {Object} event
- * @returns {string}
+ * Set start button listener
  */
-const getLastCommand = event => {
-  const last = event.results.length - 1;
-  const lastCommand = event.results[last][0].transcript;
-  return lastCommand;
-};
-
-/**
- * @param {string} command
- * @returns {string}
- */
-const filterCommand = command => {
-  command = command.trim();
-  command = command.toLowerCase();
-  command = wordToNumber(command);
-  command = areQuestionsActive(command);
-  return command;
-};
-
-/**
- * @param {string} command
- * @returns {string}
- */
-const wordToNumber = command => {
-  command = command2WordMap(command, "number");
-  return command;
-};
-
-/**
- * @param {string} command
- * @returns {string}
- */
-const command2WordMap = (command, mapType) => {
-  const map = wordMap[mapType];
-  Object.keys(map).forEach(key => {
-    if (command.includes(key)) {
-      command = command.replace(key, map[key]);
-    }
-  });
-  return command;
-};
-
-/**
- * Changes command with start if questions are not active and command is next.
- * @param {string} command
- * @returns {string}
- */
-const areQuestionsActive = command => {
-  return command === "next" && window.questionsActive ? "start" : command;
-};
-
-/**
- * @param {string} command
- * @returns {string}
- */
-const answer2Email = command => {
-  command = wordToEmail(command);
-  command = removeSpaces(command);
-  return command;
-};
-
-/**
- * @param {string} command
- * @returns {string}
- */
-const wordToEmail = command => {
-  command = command2WordMap(command, "punctuation");
-  return command;
-};
-
-/**
- * @param {string} command
- * @returns {string}
- */
-const removeSpaces = command => {
-  return command.replace(/\s/g, "");
-};
-
-/**
- * @param {string} command
- * @returns {string}
- */
-const firstCharToUpperCase = command => {
-  return command.charAt(0).toUpperCase() + command.substring(1) + " ";
-};
-
-/**
- * @param {string} command
- * @returns {string}
- */
-const formatAnswerCaseRule = command => {
-  const words = command.split(" ");
-  command = "";
-  for (let word of words) {
-    command += firstCharToUpperCase(word);
+const setStartButtonListener = () => {
+  const startButton = getStartButton();
+  if (isLastHeader(startButton)) {
+    /* Questions are active, read first question. */
+    addEventListenerToButton(startButton, 0, readQuestionHeader);
+    window.questionsActive = true;
   }
-  command = command.trim();
-  return command;
+  readHeaderTexts();
 };
 
 /**
- * @param {string} command
- * @returns {string}
+ * Get start button
+ * @returns {HTMLElement}
  */
-const answer2Date = answer => {
-  const month = getMonth(answer);
-  const { day, year } = getDaynYear(answer);
-  return year + "-" + month + "-" + day;
+const getStartButton = () => {
+  return document.getElementById("jfCard-welcome-start");
 };
 
 /**
- * @param {string} command
- * @returns {string}
+ * Set next and previous buttons listeners
  */
-const getMonth = command => {
-  const map = wordMap.month;
-  let monthValue = "";
-  Object.keys(map).forEach(key => {
-    if (command.includes(key)) {
-      monthValue = map[key];
-    }
-  });
-  return monthValue;
-};
-
-/**
- * @param {string} command
- * @returns {object}
- */
-const getDaynYear = answer => {
-  const date = [];
-  const r = /\d+/g;
-  let m;
-  while ((m = r.exec(answer)) != null) {
-    date.push(m[0]);
+const setNextnPreviousButtonsListener = () => {
+  for (let qNumber = 0; qNumber < window.questionCount; qNumber++) {
+    setNextButtonsListener(qNumber);
+    setPreviousButtonsListener(qNumber);
   }
-  const day = toZeroFormatDay(date[0]);
-  const year = date[1];
-  return { day, year };
 };
 
 /**
- * @param {string} command
- * @returns {string}
- */
-const toZeroFormatDay = day => {
-  day = day.length === 1 ? "0" + day : day;
-  return day;
-};
-
-/**
- * @param {string} command
- * @returns {string}
- */
-function answer2AmPm(answer) {
-  return answer.includes("a.m.") ? "AM" : "PM";
-}
-
-/**
- * Set questions array to window
- */
-const getQuestions = () => {
-  window.questionCount = getQuestionCount();
-  const questions = [];
-  for (let index = 0; index < window.questionCount; index++) {
-    const questionNumber = index;
-    const questionHeader = getQuestionHeader(questionNumber);
-    const questionFields = getQuestionFields(questionNumber);
-    const dataType = getQuestionDataType(questionFields);
-    const fieldNo = 0;
-    questions.push({ questionFields, dataType, questionHeader, fieldNo });
-  }
-  window.questions = questions;
-};
-
-/**
- * @return {number}
- */
-const getQuestionCount = () => {
-  let questionCount = document.getElementById("cardProgress-questionCount");
-  questionCount = questionCount.innerHTML;
-  questionCount = removeSpaces(questionCount);
-  return questionCount;
-};
-
-/**
+ * Set next button listener
+ * Action type: 1
+ * Increase current question
  * @param {number} questionNumber
- * @return {string}
  */
-const getQuestionHeader = questionNumber => {
-  const questionContainer = document.getElementsByClassName(
-    "jsQuestionLabelContainer"
-  );
-  return questionContainer[questionNumber].innerHTML;
+const setNextButtonsListener = questionNumber => {
+  const nextButton = getActionButton(1, questionNumber);
+  addEventListenerToButton(nextButton, 1, readQuestionHeader);
 };
 
 /**
- * @param {array} inputFields
- * @return {string}
- */
-const getQuestionDataType = inputFields => {
-  let element = inputFields[0];
-  while (!element.className.includes("form-line")) {
-    element = element.parentElement;
-  }
-  return element.getAttribute("data-type");
-};
-
-/**
+ * Set previous button listener
+ * Action type: 0
+ * Decrease current question
  * @param {number} questionNumber
- * @return {HTMLCollection}
  */
-const getQuestionFields = questionNumber => {
-  const questions = document.getElementsByClassName("jfCard-question");
-  const question = questions[questionNumber];
-  const questionFields = question.getElementsByClassName("jfField");
-  return questionFields;
+const setPreviousButtonsListener = questionNumber => {
+  const previousButton = getActionButton(0, questionNumber);
+  addEventListenerToButton(previousButton, -1, readQuestionHeader);
 };
 
 /**
- * @param {HTMLElement} jfField
- * @param {string} tagName
- * @return {HTMLCollection}
+ * Get action button
+ * Action type
+ * 0: Previous
+ * 1: Next
+ * 2: Submit
+ * @param {number} actionType
+ * @param {number} currentQuestion
+ * @returns {HTMLElement}
  */
-const getElementByTagName = (jfField, tagName) => {
-  return jfField.getElementsByTagName(tagName);
+const getActionButton = (actionType, currentQuestion) => {
+  const currentCard = document.getElementsByClassName("jfCard-actions");
+  const cardActionDiv = currentCard[currentQuestion];
+  return cardActionDiv.getElementsByTagName("button")[actionType];
 };
 
 /**
- * Get header text
- * @returns {string}
+ * Add event listener to button
+ * @param {HTMLElement} button
+ * @param {number} addCurrentQuestion
+ * @param {function} eventFunction
  */
-const getHeaderText = () => {
-  return document.getElementsByClassName("jfWelcome-header form-header")[0]
-    .innerHTML;
+const addEventListenerToButton = (
+  button,
+  addCurrentQuestion,
+  eventFunction
+) => {
+  button.addEventListener("click", function() {
+    window.currentQuestion += addCurrentQuestion;
+    eventFunction(window.currentQuestion);
+  });
 };
 
 /**
- * Get subheader text
- * @returns {string}
+ * Click start
  */
-const getSubHeaderText = () => {
-  return document.getElementsByClassName(
-    "jfWelcome-description form-subHeader"
-  )[0].innerHTML;
+const clickStart = () => {
+  const startButton = getStartButton();
+  startButton.click();
+  updateQuestionsActive();
 };
 
 /**
- * Get header message
- * @returns {string}
+ * Click previous
+ * Action Type: 0 (Previous)
  */
-const getHeaderMessage = () => {
-  const headerText = getHeaderText();
-  const subHeader = getSubHeaderText();
-  return headerText + " , " + subHeader;
+const clickPrevious = () => {
+  const currentQuestion = window.currentQuestion;
+  const nextButton = getActionButton(0, currentQuestion);
+  nextButton.click();
 };
 
 /**
- * Controls is last header
- * @param {HTMLElement} {button}
- * @returns {boolean}
+ * Click next
+ * Action Type: 1 (Next)
  */
-const isLastHeader = button => {
-  return button.getAttribute("class").includes("forNext-heading");
+const clickNext = () => {
+  const currentQuestion = window.currentQuestion;
+  const nextButton = getActionButton(1, currentQuestion);
+  nextButton.click();
 };
 
 /**
- * Controls if is last question or not
- * @returns {boolean}
+ * Click submit
+ * Action Type: 2 (Submit)
  */
-const isLastQuestion = button => {
-  return window.currentQuestion + 1 >= window.questions.length;
+const clickSubmit = () => {
+  const currentQuestion = window.currentQuestion;
+  const submitButton = getActionButton(2, currentQuestion);
+  submitButton.click();
 };
 
 /**
- * Checks is end of the form or not
- * @param {object} {question}
- * @returns {boolean}
+ * Update questions active
  */
-const isEndOfTheForm = question => {
-  return (
-    window.currentQuestion === window.questionCount - 1 &&
-    question.fieldNo === question.questionFields.length - 1
-  );
+const updateQuestionsActive = () => {
+  if (window.questionsActive) {
+    window.questionsActive = false;
+  } else {
+    setStartButtonListener();
+  }
 };
 
 /**
@@ -770,7 +922,7 @@ const fillField = (question, answer) => {
     answer = answer2Email(answer);
     fillInput(input, field, answer);
   } else {
-    answer = formatAnswerCaseRule(answer);
+    answer = formatAnswerCaseRule$1(answer);
     fillInput(input, field, answer);
   }
 };
@@ -1300,7 +1452,7 @@ const clearTextBox = textBoxInput => {
  * @returns {string}
  */
 const fillText = (textBoxInput, answer, prevValue) => {
-  answer = formatAnswerCaseRule$1(answer, prevValue);
+  answer = formatAnswerCaseRule(answer, prevValue);
   textBoxInput.value = answer;
   textBoxInput.parentElement.className += " isFilled";
   return answer;
@@ -1312,7 +1464,7 @@ const fillText = (textBoxInput, answer, prevValue) => {
  * @param {string} prevValue
  * @returns {string}
  */
-const formatAnswerCaseRule$1 = (answer, prevValue) => {
+const formatAnswerCaseRule = (answer, prevValue) => {
   const firstLetter = answer.substring(0, 1).toUpperCase();
   return prevValue !== ""
     ? prevValue + firstLetter + answer.substring(1) + ". "
@@ -1511,6 +1663,29 @@ const getTimeAnswers = answer => {
   return [hourValue, minuteValue, pmamValue];
 };
 
+/**
+ * @param {string} answer
+ */
+const fillQuestion = answer => {
+  const question = getCurrentQuestion();
+  const { dataType } = question;
+  const fillQuestionFunction = getFillQuestionFunction(dataType);
+  fillQuestionFunction(question, answer);
+
+  if (isEndOfTheForm(question)) {
+    readEndOfTheFormMessage();
+  }
+};
+
+/**
+ * Get fill question function
+ * @param {string} dataType
+ * @returns {function}
+ */
+getFillQuestionFunction = dataType => {
+  return wordMap.formElementFunctions[dataType].fillQuestion;
+};
+
 const wordMap = {
   number: {
     zero: "0",
@@ -1547,6 +1722,14 @@ const wordMap = {
     colon: ":",
     semicolon: ";",
     slash: "/"
+  },
+  commandFunctions: {
+    start: clickStart,
+    next: clickNext,
+    previous: clickPrevious,
+    submit: clickSubmit,
+    check_answers: readAllAnswers,
+    fill_question: fillQuestion
   },
   multipleFieldWidgets: [
     "control_dropdown",
@@ -1636,353 +1819,199 @@ const wordMap = {
 };
 
 /**
- * Start record
+ * @param {Object} event
+ * @return {string}
  */
-const startRecord = () => {
-  window.recognition.start();
-  window.speechStopped = false;
+const getCommand = event => {
+  const lastCommand = getLastCommand(event);
+  const command = filterCommand(lastCommand);
+  console.log("Command : ");
+  console.log(command);
+  return command;
 };
 
 /**
- * Stop record
+ * Get command function
+ * @param {string} command
+ * @returns {function}
  */
-const stopRecord = () => {
-  recognition.stop();
-  speechStopped = true;
+const getCommandFunction = command => {
+  const commandFunction = wordMap.commandFunctions[command];
+  return commandFunction === undefined
+    ? wordMap.commandFunctions["fill_question"]
+    : commandFunction;
 };
 
 /**
- * Speak and start record
- * @param {string} speakText
+ * @param {Object} event
+ * @returns {string}
  */
-const speakAndStartRecord = speakText => {
-  stopRecord();
-  setTimeout(function() {
-    const message = new SpeechSynthesisUtterance(speakText);
-    window.speechSynthesis.speak(message);
-    message.onend = function() {
-      startRecord();
-    };
-  }, 1000);
+const getLastCommand = event => {
+  const last = event.results.length - 1;
+  const lastCommand = event.results[last][0].transcript;
+  return lastCommand;
 };
 
 /**
- * Read question header and read question options if it is optional.
+ * @param {string} command
+ * @returns {string}
  */
-const readQuestionHeader = () => {
-  const question = getCurrentQuestion();
-  const { questionHeader, dataType } = question;
-  if (isMultipleFieldWidget(dataType)) {
-    stopRecord();
-    setTimeout(function() {
-      const message = new SpeechSynthesisUtterance(questionHeader);
-      window.speechSynthesis.speak(message);
-      message.onend = function() {
-        question.fieldNo = 0;
-        readQuestionOptions();
-      };
-    }, 1000);
-  } else {
-    speakAndStartRecord(questionHeader);
+const filterCommand = command => {
+  command = command.trim();
+  command = command.toLowerCase();
+  command = checkAnswersCommand(command);
+  command = wordToNumber(command);
+  command = areQuestionsActive(command);
+  return command;
+};
+
+/**
+ * @param {string} command
+ * @returns {string}
+ */
+const wordToNumber = command => {
+  command = command2WordMap(command, "number");
+  return command;
+};
+
+/**
+ * @param {string} command
+ * @returns {string}
+ */
+const command2WordMap = (command, mapType) => {
+  const map = wordMap[mapType];
+  Object.keys(map).forEach(key => {
+    if (command.includes(key)) {
+      command = command.replace(key, map[key]);
+    }
+  });
+  return command;
+};
+
+/**
+ * Changes command with start if questions are not active and command is next.
+ * @param {string} command
+ * @returns {string}
+ */
+const areQuestionsActive = command => {
+  return command === "next" && window.questionsActive ? "start" : command;
+};
+
+/**
+ * Changes command if command is check answers with check_answers because of word map function naming.
+ * @param {string} command
+ * @returns {string}
+ */
+const checkAnswersCommand = command => {
+  return command === "check answers" ? "check_answers" : command;
+};
+
+/**
+ * @param {string} command
+ * @returns {string}
+ */
+const answer2Email = command => {
+  command = wordToEmail(command);
+  command = removeSpaces(command);
+  return command;
+};
+
+/**
+ * @param {string} command
+ * @returns {string}
+ */
+const wordToEmail = command => {
+  command = command2WordMap(command, "punctuation");
+  return command;
+};
+
+/**
+ * @param {string} command
+ * @returns {string}
+ */
+const removeSpaces = command => {
+  return command.replace(/\s/g, "");
+};
+
+/**
+ * @param {string} command
+ * @returns {string}
+ */
+const firstCharToUpperCase = command => {
+  return command.charAt(0).toUpperCase() + command.substring(1) + " ";
+};
+
+/**
+ * @param {string} command
+ * @returns {string}
+ */
+const formatAnswerCaseRule$1 = command => {
+  const words = command.split(" ");
+  command = "";
+  for (let word of words) {
+    command += firstCharToUpperCase(word);
   }
+  command = command.trim();
+  return command;
 };
 
 /**
- * Read question options
+ * @param {string} command
+ * @returns {string}
  */
-const readQuestionOptions = () => {
-  const currentQuestion = getCurrentQuestion();
-  const { dataType } = currentQuestion;
-  const readOptionsFunction = getReadOptionsFunction(dataType);
-  readOptionsFunction(currentQuestion, startRecord, stopRecord);
+const answer2Date = answer => {
+  const month = getMonth(answer);
+  const { day, year } = getDaynYear(answer);
+  return year + "-" + month + "-" + day;
 };
 
 /**
- * Ger read options function
- * @param {string} dataType
- * @return {function}
+ * @param {string} command
+ * @returns {string}
  */
-const getReadOptionsFunction = dataType => {
-  return wordMap.formElementFunctions[dataType].readOptions;
+const getMonth = command => {
+  const map = wordMap.month;
+  let monthValue = "";
+  Object.keys(map).forEach(key => {
+    if (command.includes(key)) {
+      monthValue = map[key];
+    }
+  });
+  return monthValue;
 };
 
 /**
- * Get Current Question
+ * @param {string} command
  * @returns {object}
  */
-const getCurrentQuestion = () => {
-  const currentQuestion = window.currentQuestion;
-  return window.questions[currentQuestion];
+const getDaynYear = answer => {
+  const date = [];
+  const r = /\d+/g;
+  let m;
+  while ((m = r.exec(answer)) != null) {
+    date.push(m[0]);
+  }
+  const day = toZeroFormatDay(date[0]);
+  const year = date[1];
+  return { day, year };
 };
 
 /**
- * Multiple field widget filter
- * @param {string} {dataType}
- * @returns {boolean}
- */
-const isMultipleFieldWidget = dataType => {
-  const { multipleFieldWidgets } = wordMap;
-  return multipleFieldWidgets.includes(dataType);
-};
-
-/**
- * Read end of the form message
- */
-const readEndOfTheFormMessage = () => {
-  const { endFormMessage } = wordMap;
-  speakAndStartRecord(endFormMessage);
-};
-
-/**
- * Get multiple field answers
- * ex: Question 5 <Question Header> : <Question Answer 1> <Question Answer 2> ...
- * @param {string} answer
+ * @param {string} command
  * @returns {string}
  */
-const getMultipleFieldAnswer = (question, qid, qHeader) => {
-  const fields = question.questionFields;
-  let fieldAnswers = "";
-  for (let field of fields) {
-    const fieldAnswer = field.answer;
-    if (fieldAnswer !== undefined) {
-      fieldAnswers += fieldAnswer + " , ";
-    }
-  }
-  return fieldAnswers;
+const toZeroFormatDay = day => {
+  day = day.length === 1 ? "0" + day : day;
+  return day;
 };
 
 /**
- * Format answer
- * ex: Question 5 <Question Header> : <Question Answer>
- * @param {string} answer
+ * @param {string} command
  * @returns {string}
  */
-const formatAnswer = (answer, qid, qHeader) => {
-  if (answer !== "") {
-    return (
-      "Question " +
-      qid +
-      " , " +
-      qHeader +
-      " , " +
-      "Answer is , " +
-      answer +
-      " . "
-    );
-  } else {
-    return "";
-  }
-};
-
-/**
- * @param {string} answer
- * @returns {boolean}
- */
-const hasMultipleAnswers = answer => {
-  return answer === undefined;
-};
-
-/**
- * Get all answers
- * @returns {string}
- */
-const getAllAnswers = () => {
-  const questions = window.questions;
-  let answersText = "";
-  let qid = 1;
-  for (let question of questions) {
-    const qAnswer = question.answer;
-    const qHeader = question.questionHeader;
-    answersText += hasMultipleAnswers(qAnswer)
-      ? formatAnswer(getMultipleFieldAnswer(question), qid, qHeader)
-      : formatAnswer(qAnswer, qid, qHeader);
-    qid += 1;
-  }
-  return answersText;
-};
-
-/**
- * Read all answers of form.
- */
-const readAllAnswers = () => {
-  const { optionalEndFormMessage } = wordMap;
-  const answers = getAllAnswers() + optionalEndFormMessage;
-  speakAndStartRecord(answers);
-};
-
-/**
- * Read Form Header
- */
-const readHeaderTexts = () => {
-  const headerMessage = getHeaderMessage();
-  speakAndStartRecord(headerMessage);
-};
-
-/**
- * Initialize voice form
- */
-const initializeVoiceForm = () => {
-  getQuestions();
-  setStartButtonListener();
-  setNextnPreviousButtonsListener();
-};
-
-/**
- * Set start button listener
- */
-const setStartButtonListener = () => {
-  const startButton = getStartButton();
-  if (isLastHeader(startButton)) {
-    /* Questions are active, read first question. */
-    addEventListenerToButton(startButton, 0, readQuestionHeader);
-    window.questionsActive = true;
-  }
-  readHeaderTexts();
-};
-
-/**
- * Get start button
- * @returns {HTMLElement}
- */
-const getStartButton = () => {
-  return document.getElementById("jfCard-welcome-start");
-};
-
-/**
- * Set next and previous buttons listeners
- */
-const setNextnPreviousButtonsListener = () => {
-  for (let qNumber = 0; qNumber < window.questionCount; qNumber++) {
-    setNextButtonsListener(qNumber);
-    setPreviousButtonsListener(qNumber);
-  }
-};
-
-/**
- * Set next button listener
- * Action type: 1
- * Increase current question
- * @param {number} questionNumber
- */
-const setNextButtonsListener = questionNumber => {
-  const nextButton = getActionButton(1, questionNumber);
-  addEventListenerToButton(nextButton, 1, readQuestionHeader);
-};
-
-/**
- * Set previous button listener
- * Action type: 0
- * Decrease current question
- * @param {number} questionNumber
- */
-const setPreviousButtonsListener = questionNumber => {
-  const previousButton = getActionButton(0, questionNumber);
-  addEventListenerToButton(previousButton, -1, readQuestionHeader);
-};
-
-/**
- * Get action button
- * Action type
- * 0: Previous
- * 1: Next
- * 2: Submit
- * @param {number} actionType
- * @param {number} currentQuestion
- * @returns {HTMLElement}
- */
-const getActionButton = (actionType, currentQuestion) => {
-  const currentCard = document.getElementsByClassName("jfCard-actions");
-  const cardActionDiv = currentCard[currentQuestion];
-  return cardActionDiv.getElementsByTagName("button")[actionType];
-};
-
-/**
- * Add event listener to button
- * @param {HTMLElement} button
- * @param {number} addCurrentQuestion
- * @param {function} eventFunction
- */
-const addEventListenerToButton = (
-  button,
-  addCurrentQuestion,
-  eventFunction
-) => {
-  button.addEventListener("click", function() {
-    window.currentQuestion += addCurrentQuestion;
-    eventFunction(window.currentQuestion);
-  });
-};
-
-/**
- * Click start
- */
-const clickStart = () => {
-  const startButton = getStartButton();
-  startButton.click();
-  updateQuestionsActive();
-};
-
-/**
- * Click previous
- * Action Type: 0 (Previous)
- */
-const clickPrevious = () => {
-  const currentQuestion = window.currentQuestion;
-  const nextButton = getActionButton(0, currentQuestion);
-  nextButton.click();
-};
-
-/**
- * Click next
- * Action Type: 1 (Next)
- */
-const clickNext = () => {
-  const currentQuestion = window.currentQuestion;
-  const nextButton = getActionButton(1, currentQuestion);
-  nextButton.click();
-};
-
-/**
- * Click submit
- * Action Type: 2 (Submit)
- */
-const clickSubmit = () => {
-  const currentQuestion = window.currentQuestion;
-  const submitButton = getActionButton(2, currentQuestion);
-  submitButton.click();
-};
-
-/**
- * Update questions active
- */
-const updateQuestionsActive = () => {
-  if (window.questionsActive) {
-    window.questionsActive = false;
-  } else {
-    setStartButtonListener();
-  }
-};
-
-/**
- * @param {string} answer
- */
-const fillQuestion = answer => {
-  const question = getCurrentQuestion();
-  const { dataType } = question;
-  const fillQuestionFunction = getFillQuestionFunction(dataType);
-  fillQuestionFunction(question, answer);
-
-  if (isEndOfTheForm(question)) {
-    readEndOfTheFormMessage();
-  }
-};
-
-getFillQuestionFunction = dataType => {
-  console.log("dataType");
-  console.log(dataType);
-
-  return wordMap.formElementFunctions[dataType].fillQuestion;
-};
+function answer2AmPm(answer) {
+  return answer.includes("a.m.") ? "AM" : "PM";
+}
 
 class Speech2Text {
   constructor() {
@@ -1993,25 +2022,8 @@ class Speech2Text {
      */
     this.recognition.onresult = function(event) {
       const command = getCommand(event);
-      switch (command) {
-        case "start":
-          clickStart();
-          break;
-        case "next":
-          clickNext();
-          break;
-        case "previous":
-          clickPrevious();
-          break;
-        case "submit":
-          clickSubmit();
-          break;
-        case "check answers":
-          readAllAnswers();
-          break;
-        default:
-          fillQuestion(command);
-      }
+      const commandFunction = getCommandFunction(command);
+      commandFunction(command);
     };
 
     /**

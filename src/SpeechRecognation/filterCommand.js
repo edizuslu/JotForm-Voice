@@ -13,6 +13,18 @@ export const getCommand = event => {
 };
 
 /**
+ * Get command function
+ * @param {string} command
+ * @returns {function}
+ */
+export const getCommandFunction = command => {
+  const commandFunction = wordMap.commandFunctions[command];
+  return commandFunction === undefined
+    ? wordMap.commandFunctions["fill_question"]
+    : commandFunction;
+};
+
+/**
  * @param {Object} event
  * @returns {string}
  */
@@ -29,6 +41,7 @@ const getLastCommand = event => {
 const filterCommand = command => {
   command = command.trim();
   command = command.toLowerCase();
+  command = checkAnswersCommand(command);
   command = wordToNumber(command);
   command = areQuestionsActive(command);
   return command;
@@ -64,6 +77,15 @@ export const command2WordMap = (command, mapType) => {
  */
 const areQuestionsActive = command => {
   return command === "next" && window.questionsActive ? "start" : command;
+};
+
+/**
+ * Changes command if command is check answers with check_answers because of word map function naming.
+ * @param {string} command
+ * @returns {string}
+ */
+const checkAnswersCommand = command => {
+  return command === "check answers" ? "check_answers" : command;
 };
 
 /**

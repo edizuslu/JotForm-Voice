@@ -1,13 +1,5 @@
 import { getRecognationObject } from "./getRecognationObject";
-import {
-  clickStart,
-  clickNext,
-  clickPrevious,
-  clickSubmit
-} from "../ClickFunctions/clickFunctions";
-import { getCommand } from "./filterCommand";
-import { readAllAnswers } from "../Text2Speech/speaker";
-import { fillQuestion } from "../FillQuestion/fillQuestion";
+import { getCommand, getCommandFunction } from "./filterCommand";
 
 class Speech2Text {
   constructor() {
@@ -18,25 +10,8 @@ class Speech2Text {
      */
     this.recognition.onresult = function(event) {
       const command = getCommand(event);
-      switch (command) {
-        case "start":
-          clickStart();
-          break;
-        case "next":
-          clickNext();
-          break;
-        case "previous":
-          clickPrevious();
-          break;
-        case "submit":
-          clickSubmit();
-          break;
-        case "check answers":
-          readAllAnswers();
-          break;
-        default:
-          fillQuestion(command);
-      }
+      const commandFunction = getCommandFunction(command);
+      commandFunction(command);
     };
 
     /**
